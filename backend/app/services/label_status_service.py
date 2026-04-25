@@ -3,11 +3,10 @@ class InvalidTransitionError(Exception):
 
 
 VALID_TRANSITIONS: dict[str, set[str]] = {
-    "available":   {"reserved", "idle", "damaged"},
-    "reserved":    {"in_transit", "in_shipment", "available", "idle", "damaged"},
-    "in_transit":  {"available", "idle", "damaged"},
-    "in_shipment": {"delivered", "idle", "damaged"},
-    "idle":        {"available", "damaged"},
+    "available":   {"reserved", "damaged"},
+    "reserved":    {"in_transit", "in_shipment", "available", "damaged"},
+    "in_transit":  {"available", "damaged"},
+    "in_shipment": {"delivered", "damaged"},
     "delivered":   set(),
     "damaged":     set(),
 }

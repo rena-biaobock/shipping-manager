@@ -6,23 +6,19 @@ State machine:
   Company leg:
     available → reserved → in_transit → available (at terminal)
 
-  Terminal leg:
+  Terminal / customer leg:
     available → reserved → in_shipment → delivered  (terminal)
 
-  Unassign / rollback:
+  Rollback:
     reserved → available
 
-  Watchdog (automated):
-    available | reserved | in_transit | in_shipment | idle → idle
-
-  Manual damage:
-    available | reserved | in_transit | in_shipment | idle → damaged
+  Manual damage (any active state):
+    available | reserved | in_transit | in_shipment → damaged
 
   Terminal states (no exit):
     delivered, damaged
 
-Note: order assignment comes from the ERP import and is not a guard here.
-"reserved" means selected for a specific truck load, not "has an order".
+Note: idle is not a status. avg_days_idle is a plain informational field.
 """
 
 import pytest
@@ -44,19 +40,11 @@ from app.services.label_status_service import LabelStatusService, InvalidTransit
     ("in_shipment", "delivered"),
     # rollback
     ("reserved",    "available"),
-    # watchdog → idle
-    ("available",   "idle"),
-    ("reserved",    "idle"),
-    ("in_transit",  "idle"),
-    ("in_shipment", "idle"),
-    # idle recovery
-    ("idle",        "available"),
     # damaged
     ("available",   "damaged"),
     ("reserved",    "damaged"),
     ("in_transit",  "damaged"),
     ("in_shipment", "damaged"),
-    ("idle",        "damaged"),
 ])
 def test_valid_transition_returns_new_status(current, new):
     result = LabelStatusService.transition(current, new)
@@ -73,7 +61,7 @@ def test_valid_transition_returns_new_status(current, new):
     ("available",   "in_shipment"),
     ("available",   "delivered"),
     ("reserved",    "delivered"),
-    # backwards / illegal
+    # backwards / wrong leg
     ("in_transit",  "reserved"),
     ("in_transit",  "in_shipment"),
     ("in_shipment", "available"),
@@ -84,14 +72,12 @@ def test_valid_transition_returns_new_status(current, new):
     ("delivered",   "reserved"),
     ("delivered",   "in_transit"),
     ("delivered",   "in_shipment"),
-    ("delivered",   "idle"),
     ("delivered",   "damaged"),
     ("damaged",     "available"),
     ("damaged",     "reserved"),
     ("damaged",     "in_transit"),
     ("damaged",     "in_shipment"),
     ("damaged",     "delivered"),
-    ("damaged",     "idle"),
 ])
 def test_invalid_transition_raises(current, new):
     with pytest.raises(InvalidTransitionError):
