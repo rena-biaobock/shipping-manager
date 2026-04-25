@@ -70,6 +70,36 @@ Two core objectives:
 
 ---
 
+## Architectural Decisions
+
+Full rationale is in [README.md](./README.md). Summary of non-obvious choices:
+
+| Decision | Choice | Why |
+|----------|--------|-----|
+| Back-end framework | FastAPI | Async-native, built-in Pydantic validation, OpenAPI docs. Flask gives nothing; Django gives too much for a pure API. |
+| Database | PostgreSQL | Concurrent write safety, native `JSONB` for position data, DB-level `ENUM` enforcement. |
+| Redis | Cache + Celery broker | One service covers both needs; no reason to run RabbitMQ + Memcached separately. |
+| ORM | SQLAlchemy 2.x async | Sync SQLAlchemy blocks the FastAPI event loop. Tortoise ORM is async but has a less mature migration story. |
+| Migrations | Alembic | `--autogenerate` from ORM models. Standard SQLAlchemy companion. |
+| Task queue | Celery | Retry logic, job visibility, on-demand triggers from the API. Cron alone provides none of these. |
+| Auth | JWT | Single-tenant internal tool; stateless tokens require no session store. |
+| Test HTTP client | httpx `AsyncClient` | Tests FastAPI endpoints in-process without a live server; fully async. |
+| Style linting | Black + Flake8 + isort | One named tool per concern, matching the CI intent. Ruff is a valid alternative. |
+| Front-end UI | shadcn/ui + Recharts | Unstyled composable primitives (you own the code) + the standard React charting library. |
+| State | Zustand | ~10 lines, no reducers, no action creators. Redux is overkill for two data domains. |
+| Server state | TanStack Query v5 | Handles caching, background refetch, and cache invalidation after mutations out of the box. |
+| Forms | React Hook Form + Zod | Zod schema doubles as the TypeScript type; RHF avoids re-renders on every keystroke. |
+| Test runner | Vitest | Native Vite runner — same config, no Babel/ESM workarounds that Jest requires with Vite. |
+| PK on stock_labels | `progressivo` VARCHAR | The barcode *is* the identity. A surrogate UUID creates two identities for one physical object. |
+| Weight unit | `volume_tons` (not kg) | Source data is in metric tons; confirmed by cross-checking piece count × unit weight. |
+| `actual_length_m` nullable | Yes | ~30% of labels are plates/fittings with no meaningful length. |
+| Bin-packing algorithm | FFD (First Fit Decreasing) | Well-understood heuristic, ≤ 11/9 of optimal, fast enough for real-time use. Exact solvers don't scale. |
+| `order_condition` | Enum, not free text | Five fixed values drive load prioritisation; free text makes ordering unreliable. |
+| `embarque_id` | VARCHAR ref, not boolean | Source column holds a 7-digit external shipment ID, not a flag. Discarding it breaks reconciliation. |
+| Product description | Single field, not parsed | Non-pipe items have free-form descriptions; parsing rules from one export are fragile. |
+
+---
+
 ## Environment Variables
 
 ### Back-end (`backend/.env`)
