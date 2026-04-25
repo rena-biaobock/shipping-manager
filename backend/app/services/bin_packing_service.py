@@ -29,6 +29,12 @@ class BinPackingService:
             candidates = [l for l in candidates if l.country == filters.country]
         if filters.order_condition is not None:
             candidates = [l for l in candidates if l.order_condition == filters.order_condition]
+        if filters.exit_date_from is not None or filters.exit_date_to is not None:
+            candidates = [l for l in candidates if l.exit_date is not None]
+        if filters.exit_date_from is not None:
+            candidates = [l for l in candidates if l.exit_date >= filters.exit_date_from]
+        if filters.exit_date_to is not None:
+            candidates = [l for l in candidates if l.exit_date <= filters.exit_date_to]
         candidates.sort(key=lambda l: l.volume_tons, reverse=True)
 
         items: list[LoadPlanItem] = []
