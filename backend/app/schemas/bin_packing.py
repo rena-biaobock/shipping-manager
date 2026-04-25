@@ -10,8 +10,10 @@ class LabelInput(BaseModel):
     progressivo: str
     volume_tons: float
     market_type: str
+    country: str
     order_condition: str
 
 
 class PackingFilters(BaseModel):
-    pass
+    country: str | None = None
+    order_condition: str | None = None

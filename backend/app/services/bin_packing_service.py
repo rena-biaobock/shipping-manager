@@ -25,6 +25,10 @@ class BinPackingService:
         max_iterations: int | None = None,
     ) -> LoadPlan:
         candidates = [l for l in labels if l.market_type == "ME"]
+        if filters.country is not None:
+            candidates = [l for l in candidates if l.country == filters.country]
+        if filters.order_condition is not None:
+            candidates = [l for l in candidates if l.order_condition == filters.order_condition]
         candidates.sort(key=lambda l: l.volume_tons, reverse=True)
 
         items: list[LoadPlanItem] = []

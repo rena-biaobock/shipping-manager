@@ -29,12 +29,14 @@ def make_label(
     progressivo: str,
     volume_tons: float,
     market_type: str = "ME",
+    country: str = "Paraguay",
     order_condition: str = "pedido_ate_hoje",
 ) -> LabelInput:
     return LabelInput(
         progressivo=progressivo,
         volume_tons=volume_tons,
         market_type=market_type,
+        country=country,
         order_condition=order_condition,
     )
 
