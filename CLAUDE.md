@@ -139,7 +139,7 @@ shipping-manager/
 │   ├── src/
 │   │   ├── api/v1/                       # PASOE Web Handlers (REST endpoints)
 │   │   │   ├── StockLabelsHandler.cls    # GET /stock-labels, PATCH status/location
-│   │   │   ├── LoadsHandler.cls          # GET /loads, POST, PATCH status
+│   │   │   ├── LoadsHandler.cls          # GET /loads, GET /loads/:id/items, POST, PATCH /:id/status
 │   │   │   └── BinPackingHandler.cls     # POST /bin-packing
 │   │   ├── business/                     # Business logic / services
 │   │   │   ├── StockService.cls
@@ -242,6 +242,8 @@ piece_count         INTEGER         /* source: "Qt PC" */
 status              CHARACTER(32)   /* see valid values below */
 order_id            CHARACTER(36)   /* FK → orders.id; ? when no order */
 embarque_id         CHARACTER(32)   /* source: "Embarque Fifo" / "Embarque Etiq" */
+nf                  CHARACTER(64)   /* Nota Fiscal number */
+invoice             CHARACTER(64)   /* commercial invoice number (export) */
 scan_count          INTEGER INITIAL 0  /* source: "Qtd Escaneamentos" */
 last_scanned_at     DATETIME-TZ     /* source: "Ultimo Escaneamento" (converted from Excel serial) */
 days_without_scan   INTEGER         /* source: "Dias sem Escanear" (denormalised) */
@@ -250,13 +252,18 @@ created_at          DATETIME-TZ
 updated_at          DATETIME-TZ
 ```
 
-**`label_status` enum:** `available` | `reserved` | `in_shipment` | `delivered` | `idle` | `damaged`
+**`label_status` enum:** `available_in_stock` | `reserved` | `in_load` | `in_transit_to_terminal` | `available_in_terminal` | `in_transit_to_client` | `delivered` | `idle` | `damaged`
 
 Derivation from source data:
-- `available` — `Tem Pedido? = Não`, no embarque
-- `reserved` — `Tem Pedido? = Sim`, no embarque yet
-- `in_shipment` — `Embarque Fifo/Etiq` is a non-zero order number
+- `available_in_stock` — `Tem Pedido? = Não`, no embarque; physically in warehouse
+- `reserved` — `Tem Pedido? = Sim`, no embarque yet; allocated to an order but not yet in a load
+- `in_load` — allocated to a confirmed load plan; set automatically when a load is confirmed (US-05, US-15)
+- `in_transit_to_terminal` — load dispatched toward the port/terminal
+- `available_in_terminal` — label arrived at terminal, awaiting vessel or onward transport
+- `in_transit_to_client` — on board vessel or truck en route to client
+- `delivered` — confirmed received by client
 - `idle` — flagged by watchdog when `Dias sem Escanear ≥ IDLE_SCAN_THRESHOLD_DAYS`
+- `damaged` — manually flagged by operator
 
 ### `orders` — customer orders
 ```
@@ -294,7 +301,14 @@ delivered_at        DATETIME-TZ
 updated_at          DATETIME-TZ
 ```
 
-**`status` valid values:** `draft` | `confirmed` | `dispatched` | `delivered` | `cancelled`
+**`status` valid values:** `draft` | `pending` | `in_transit` | `dispatched` | `delivered` | `cancelled`
+
+State machine:
+- `draft` → `pending` — planner confirms the load on the Load Generation page (sets destination)
+- `pending` → `in_transit` — operator marks departure on the Loads page
+- `in_transit` → `dispatched` — operator marks arrival at destination on the Loads page
+- `dispatched` → `delivered` — operator marks final delivery confirmation
+- any → `cancelled` — operator cancels at any stage before delivery
 
 ### `load_items` — labels assigned to a load
 ```
@@ -311,7 +325,7 @@ stock_label_id CHARACTER(64)  /* FK → stock_labels.progressivo */
 | Class | Responsibility |
 |-------|---------------|
 | `StockService.cls` | CRUD labels, validate `status` transitions, filter by warehouse/product/status |
-| `LoadService.cls` | Create/confirm/dispatch loads, aggregate `volume_tons` against `truck_capacity_tons`, manage load status state machine |
+| `LoadService.cls` | Create/confirm/dispatch loads, aggregate `volume_tons` against `truck_capacity_tons`, manage load status state machine (`draft → pending → in_transit → dispatched → delivered`); transitions `stock_labels.status` to `in_load` when a load is confirmed |
 | `BinPackingService.cls` | Given a set of available labels + a capacity class (27/31/38 t), return an optimal load plan. Primary packing metric: `volume_tons`. Primary dimensional constraint: `actual_length_m`. Available filters: `warehouse_code`, `customer`, `truck_capacity_tons`. Algorithm: FFD on `volume_tons`, verify `actual_length_m` when present, check total ≤ `truck_capacity_tons`. Returns best partial plan flagged as `partial = TRUE` when cap is hit. |
 
 ### Background Agents (ABL procedures in `src/jobs/`)
@@ -444,7 +458,7 @@ Read-only view of all physical labels in the warehouse.
 │  [Total Tonnage]  [Tonnage by Country ▬▬]  [Tonnage by Client ▬▬]  │
 │                   [Tonnage by Status ▬▬]                            │
 ├─────────────────────────────────────────────────────────────────────┤
-│  [Search…]  [Warehouse ▾]  [Std Bundle ▾]  [Order Condition ▾]      │
+│  [Search…]  [Status ▾]  [Warehouse ▾]  [Std Bundle ▾]  [Condition ▾] │
 │  [Exit Date from]  [Exit Date to]                                   │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Table (paginated, 25 rows default)                                 │
@@ -472,6 +486,7 @@ Read-only view of all physical labels in the warehouse.
 
 | Filter | Type | Options |
 |--------|------|---------|
+| Status | Select | All · Available In Stock · In Load · In Transit to Terminal · Available In Terminal · In Transit to Client · Delivered |
 | Warehouse | Select | All · (distinct `warehouse_code` values from loaded data) |
 | Standard Bundle | Select | All · Yes · No |
 | Order Condition | Select | All · fixo_futuro · pedido_ate_hoje · antecipa_futuro · fixo_mes_atual · antecipa_mes_atual |
@@ -530,21 +545,32 @@ View and manage load plans.
 | Tonnage by Status | `BreakdownCard` | Mini bar chart: `load_status` → SUM `total_weight_tons` |
 | Tonnage by Destination | `BreakdownCard` | Mini bar chart: `destination` → SUM `total_weight_tons` |
 
-**Data fetching:** single `GET /api/v1/loads` call. All aggregation and search happen client-side.
+**Data fetching:** single `GET /api/v1/loads` call. All aggregation, search, filtering, and sorting happen client-side.
 
 **Search (client-side, substring, case-insensitive):** matches `id`, `destination`, `status`
+
+**Filters (client-side):**
+
+| Filter | Type | Options |
+|--------|------|---------|
+| Status | Select | All · Pending · In Transit · Dispatched · Delivered · Cancelled |
+| Destination | Select | All · (distinct `destination` values from loaded data) |
+
+**Sort:** table is sortable by Date (`created_at`) and Total Tonnage (`total_weight_tons`) — ascending/descending toggle on column header click.
 
 **Table columns:**
 
 | Column | Field | Notes |
 |--------|-------|-------|
 | Load ID | `id` | mono, accent color |
-| Date | `created_at` | date only, mono, muted |
+| Date | `created_at` | date only, mono, muted; sortable |
 | Destination | `destination` | |
-| Total Tonnage | `total_weight_tons` | mono, right-aligned |
+| Total Tonnage | `total_weight_tons` | mono, right-aligned; sortable |
 | Capacity | `truck_capacity_tons` | mono, right-aligned |
 | Used Capacity | computed | `CapacityBar` — mini bar showing fill % |
-| Status | `status` | `LoadStatusBadge` |
+| Status | `status` | `LoadStatusBadge` + inline action button |
+
+**Status action button (per row):** renders the next allowed transition as a button next to the badge. Calls `PATCH /api/v1/loads/:id/status` on click. Valid operator-triggered transitions: `pending → in_transit`, `in_transit → dispatched`, `dispatched → delivered`. Delivered and cancelled loads show no action button. Confirmation is required before dispatching (prevents accidental clicks).
 
 **Row click → inline expand (below the row):**
 
@@ -601,7 +627,9 @@ Separate page (not a modal/wizard) for generating and confirming truck loads via
 | Destination | Text input (required before confirming) |
 | Action | `CONFIRM` button — disabled until destination is filled; turns to `CONFIRMED` badge after confirm |
 
-**Confirm action:** calls `POST /api/v1/loads` to create the load with `status = draft`. Labels transition to `in_shipment`. Confirmed rows become read-only with a green CONFIRMED badge.
+**Confirm action:** calls `POST /api/v1/loads` to create the load with `status = pending`. All stock labels in the load transition automatically to `in_load` (server-side, in a single transaction). Confirmed rows become read-only with a green CONFIRMED badge.
+
+**Empty / pre-generation state:** before the first Generate click, the results area shows an empty state: icon + heading "No loads generated yet" + instruction "Select your filters above and click Generate to plan truck loads." No table is rendered.
 
 ---
 
@@ -622,21 +650,25 @@ Separate page (not a modal/wizard) for generating and confirming truck loads via
 
 | Status | Color |
 |--------|-------|
-| available | `--green` |
+| available_in_stock | `--green` |
 | reserved | `--yellow` |
-| in_shipment | `--blue` |
-| idle | `--accent` (orange) |
+| in_load | `--blue` |
+| in_transit_to_terminal | `--accent` (orange) |
+| available_in_terminal | `--yellow` |
+| in_transit_to_client | `--blue` |
 | delivered | `--text-muted` (gray) |
+| idle | `--accent` (orange) |
 | damaged | `--red` |
 
 **`load_status`:**
 
 | Status | Color |
 |--------|-------|
-| draft | `--text-muted` (gray) |
-| confirmed | `--green` |
-| dispatched | `--accent` (orange) |
-| delivered | `--blue` |
+| draft | `--text-dim` (dim gray) |
+| pending | `--text-muted` (gray) |
+| in_transit | `--accent` (orange) |
+| dispatched | `--blue` |
+| delivered | `--green` |
 | cancelled | `--red` |
 
 ---
