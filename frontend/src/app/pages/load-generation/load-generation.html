@@ -1,1 +1,131 @@
-<div></div>
+<div style="display:flex;flex-direction:column;height:100%;overflow:hidden;animation:fadeUp 0.35s ease both">
+
+  <div class="page-header">
+    <div class="page-breadcrumb">DASHBOARD / LOAD GENERATION</div>
+    <h1 class="page-title">Load Generation</h1>
+  </div>
+
+  <div class="filter-panel">
+    <div class="filter-panel-label">— Filters</div>
+    <div class="filter-panel-row">
+
+      <div class="filter-group">
+        <div class="filter-label">Warehouse</div>
+        <select class="filter-select" ng-model="vm.filters.warehouse">
+          <option value="all">All Warehouses</option>
+          <option ng-repeat="w in vm.warehouses" value="{{w}}">{{w}}</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <div class="filter-label">Client</div>
+        <select class="filter-select" ng-model="vm.filters.customer">
+          <option value="all">All Clients</option>
+          <option ng-repeat="c in vm.customers" value="{{c}}">{{c}}</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <div class="filter-label">Max Tonnage (truck)</div>
+        <div class="chip-group">
+          <button class="chip"
+                  ng-repeat="cap in vm.capacities"
+                  ng-class="{active: vm.maxTons === cap}"
+                  ng-click="vm.maxTons = cap">
+            {{cap}} t
+          </button>
+        </div>
+      </div>
+
+      <button class="generate-btn" ng-click="vm.generate()" ng-disabled="vm.generating">
+        ⟳ GENERATE LOADS
+      </button>
+
+    </div>
+  </div>
+
+  <div class="results-wrap">
+
+    <div ng-if="vm.error" style="color:var(--red);font-family:var(--mono);font-size:12px;margin-bottom:12px">{{vm.error}}</div>
+
+    <div class="empty-state" ng-if="!vm.generating && vm.generated.length === 0">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+        <rect x="1" y="3" width="15" height="13" rx="1"/>
+        <path d="M16 8h4l3 3v5h-7V8z"/>
+        <circle cx="5.5" cy="18.5" r="2.5"/>
+        <circle cx="18.5" cy="18.5" r="2.5"/>
+      </svg>
+      <span>SET FILTERS AND CLICK GENERATE</span>
+    </div>
+
+    <div ng-if="vm.generating" style="color:var(--text-muted);font-family:var(--mono);font-size:12px;padding:28px 0">
+      Generating…
+    </div>
+
+    <div ng-if="!vm.generating && vm.generated.length > 0">
+      <div class="results-header">
+        {{vm.generated.length}} LOAD{{vm.generated.length !== 1 ? 'S' : ''}} GENERATED
+        · max {{vm.maxTons}} t per truck · set destination and confirm
+      </div>
+      <div style="border:1px solid var(--border)">
+        <table>
+          <thead>
+            <tr>
+              <th>Load</th><th>Items</th>
+              <th class="right">Total Pieces</th>
+              <th class="right">Total Tonnage</th>
+              <th>Capacity Used</th>
+              <th>Destination</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr ng-repeat="plan in vm.generated track by plan._id"
+                ng-class="{'row-confirmed': vm.confirmed[plan._id], 'row-even': $even, 'row-odd': $odd}">
+              <td style="white-space:nowrap">
+                <div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:2px">{{plan._id}}</div>
+                <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">Truck {{vm.maxTons}} t</div>
+              </td>
+              <td>
+                <div ng-repeat="item in plan.items track by item.progressivo"
+                     style="font-size:12px;color:var(--text-muted);margin-bottom:2px;white-space:nowrap">
+                  <span style="font-family:var(--mono);font-size:10px;color:var(--accent)">{{item.progressivo}}</span>
+                  — {{(item.description || '').slice(0, 28)}}
+                </div>
+              </td>
+              <td class="mono right nowrap">{{vm.fmtNum(plan.totalPcs || 0)}}</td>
+              <td class="right nowrap" style="font-family:var(--mono);font-size:14px;font-weight:700">
+                {{vm.fmtTons(plan.totalTons)}}
+              </td>
+              <td style="min-width:140px">
+                <capacity-bar used="plan.totalTons" total="vm.maxTons"></capacity-bar>
+              </td>
+              <td style="min-width:190px">
+                <span ng-if="vm.confirmed[plan._id]"
+                      style="font-family:var(--mono);font-size:12px;color:var(--green)">
+                  {{plan.destination}}
+                </span>
+                <input ng-if="!vm.confirmed[plan._id]"
+                       class="dest-input"
+                       ng-class="{filled: plan.destination}"
+                       ng-model="plan.destination"
+                       placeholder="e.g. Porto de Santos" />
+              </td>
+              <td style="white-space:nowrap">
+                <load-status-badge ng-if="vm.confirmed[plan._id]" status="pending"></load-status-badge>
+                <button ng-if="!vm.confirmed[plan._id]"
+                        class="confirm-btn"
+                        ng-class="{ready: vm.canConfirm(plan)}"
+                        ng-click="vm.confirm(plan)">
+                  CONFIRM
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</div>

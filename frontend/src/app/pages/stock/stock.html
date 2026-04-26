@@ -1,1 +1,129 @@
-<div></div>
+<div style="display:flex;flex-direction:column;height:100%;animation:fadeUp 0.35s ease both">
+
+  <div class="page-header">
+    <div class="page-breadcrumb">DASHBOARD / STOCK</div>
+    <h1 class="page-title">Stock Overview</h1>
+  </div>
+
+  <div class="cards-row">
+    <total-card
+      label="Total Tonnage"
+      value="{{vm.fmtTons(vm.totalTons)}}"
+      sub="{{vm.fmtNum(vm.totalPcs)}} pcs · {{vm.filtered.length}} labels"
+      accent="var(--accent)">
+    </total-card>
+    <breakdown-card label="Tonnage by Country"  rows="vm.byCountry" accent="var(--blue)"></breakdown-card>
+    <breakdown-card label="Tonnage by Client"   rows="vm.byClient"  accent="var(--green)"></breakdown-card>
+    <breakdown-card label="Tonnage by Status"   rows="vm.byStatus"  accent="var(--yellow)"></breakdown-card>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input class="search-input" ng-model="vm.search" ng-change="vm.applyFilters()"
+             placeholder="Search label, code, client, order…" />
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Status</div>
+      <select class="filter-select" ng-model="vm.filters.status" ng-change="vm.applyFilters()">
+        <option value="all">All Statuses</option>
+        <option value="available_in_stock">Available In Stock</option>
+        <option value="reserved">Reserved</option>
+        <option value="in_load">In Load</option>
+        <option value="in_transit_to_terminal">In Transit to Terminal</option>
+        <option value="available_in_terminal">Available In Terminal</option>
+        <option value="in_transit_to_client">In Transit to Client</option>
+        <option value="delivered">Delivered</option>
+        <option value="idle">Idle</option>
+        <option value="damaged">Damaged</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Warehouse</div>
+      <select class="filter-select" ng-model="vm.filters.warehouse" ng-change="vm.applyFilters()">
+        <option value="all">All Warehouses</option>
+        <option ng-repeat="w in vm.warehouses" value="{{w}}">{{w}}</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Std Bundle</div>
+      <select class="filter-select" ng-model="vm.filters.stdBundle" ng-change="vm.applyFilters()">
+        <option value="all">All</option>
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Order Condition</div>
+      <select class="filter-select" ng-model="vm.filters.condition" ng-change="vm.applyFilters()">
+        <option value="all">All</option>
+        <option value="fixo_futuro">fixo_futuro</option>
+        <option value="pedido_ate_hoje">pedido_ate_hoje</option>
+        <option value="antecipa_futuro">antecipa_futuro</option>
+        <option value="fixo_mes_atual">fixo_mes_atual</option>
+        <option value="antecipa_mes_atual">antecipa_mes_atual</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Exit Date From</div>
+      <input class="date-input" type="date" ng-model="vm.filters.exitDateFrom" ng-change="vm.applyFilters()" />
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Exit Date To</div>
+      <input class="date-input" type="date" ng-model="vm.filters.exitDateTo" ng-change="vm.applyFilters()" />
+    </div>
+
+    <div class="filter-count">{{vm.filtered.length}} / {{vm.labels.length}}</div>
+  </div>
+
+  <div ng-if="vm.loading" style="padding:28px;color:var(--text-muted);font-family:var(--mono);font-size:12px">Loading…</div>
+  <div ng-if="vm.error"   style="padding:28px;color:var(--red);font-family:var(--mono);font-size:12px">{{vm.error}}</div>
+
+  <div class="table-wrap" ng-if="!vm.loading && !vm.error">
+    <table>
+      <thead>
+        <tr>
+          <th>Label</th><th>Item Code</th><th>Description</th><th>Client</th>
+          <th>Warehouse</th><th>Country</th><th>Order</th><th>Std Bundle</th>
+          <th>Boarding</th><th class="right">Tonnage</th><th class="right">Pieces</th>
+          <th>Condition</th><th>Exit Date</th><th>NF</th><th>Invoice</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="l in vm.filtered track by l.progressivo"
+            ng-class="$even ? 'row-even' : 'row-odd'">
+          <td class="mono accent nowrap">{{l.progressivo}}</td>
+          <td class="mono nowrap">{{l.item_code}}</td>
+          <td>{{l.description}}</td>
+          <td class="muted">{{l.customer}}</td>
+          <td class="mono muted">{{l.warehouse_code}}</td>
+          <td class="muted">{{l.country}}</td>
+          <td class="mono muted nowrap">{{l.order_number || '—'}}</td>
+          <td>
+            <span style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.06em"
+                  ng-style="{color: l.is_standard_bundle ? 'var(--green)' : 'var(--text-dim)'}">
+              {{l.is_standard_bundle ? 'YES' : 'NO'}}
+            </span>
+          </td>
+          <td class="muted">{{l.embarque_id || '—'}}</td>
+          <td class="mono right nowrap">{{l.volume_tons ? (l.volume_tons | number:3) + ' t' : '—'}}</td>
+          <td class="mono right nowrap">{{l.piece_count || '—'}}</td>
+          <td class="mono">{{l.order_condition || '—'}}</td>
+          <td class="mono muted nowrap">{{l.exit_date || '—'}}</td>
+          <td class="mono muted nowrap">{{l.nf || '—'}}</td>
+          <td class="mono muted nowrap">{{l.invoice || '—'}}</td>
+          <td class="nowrap"><label-status-badge status="{{l.status}}"></label-status-badge></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>

@@ -1,1 +1,140 @@
-<div></div>
+<div style="display:flex;flex-direction:column;height:100%;animation:fadeUp 0.35s ease both">
+
+  <div class="page-header">
+    <div class="page-breadcrumb">DASHBOARD / LOADS</div>
+    <h1 class="page-title">Load Management</h1>
+  </div>
+
+  <div class="cards-row">
+    <total-card
+      label="Total Tonnage"
+      value="{{vm.fmtTons(vm.totalTons)}}"
+      sub="{{vm.filtered.length}} loads"
+      accent="var(--accent)">
+    </total-card>
+    <breakdown-card label="Tonnage by Status"      rows="vm.byStatus" accent="var(--yellow)"></breakdown-card>
+    <breakdown-card label="Tonnage by Destination" rows="vm.byDest"   accent="var(--accent)"></breakdown-card>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input class="search-input" ng-model="vm.search" ng-change="vm.applyFilters()"
+             placeholder="Search load ID, destination, status…" />
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Status</div>
+      <select class="filter-select" ng-model="vm.filters.status" ng-change="vm.applyFilters()">
+        <option value="all">All Statuses</option>
+        <option value="draft">Draft</option>
+        <option value="pending">Pending</option>
+        <option value="in_transit">In Transit</option>
+        <option value="dispatched">Dispatched</option>
+        <option value="delivered">Delivered</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Destination</div>
+      <select class="filter-select" ng-model="vm.filters.destination" ng-change="vm.applyFilters()">
+        <option value="all">All Destinations</option>
+        <option ng-repeat="d in vm.destinations" value="{{d}}">{{d}}</option>
+      </select>
+    </div>
+
+    <div class="filter-count">{{vm.filtered.length}} / {{vm.loads.length}}</div>
+  </div>
+
+  <div ng-if="vm.loading" style="padding:28px;color:var(--text-muted);font-family:var(--mono);font-size:12px">Loading…</div>
+  <div ng-if="vm.error"   style="padding:28px;color:var(--red);font-family:var(--mono);font-size:12px">{{vm.error}}</div>
+
+  <div class="table-wrap" ng-if="!vm.loading && !vm.error">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:28px"></th>
+          <th>Load ID</th>
+          <th class="sortable" ng-click="vm.setSort('created_at')">
+            Date {{vm.sortField === 'created_at' ? (vm.sortAsc ? '↑' : '↓') : ''}}
+          </th>
+          <th>Destination</th>
+          <th class="right sortable" ng-click="vm.setSort('total_weight_tons')">
+            Total Tonnage {{vm.sortField === 'total_weight_tons' ? (vm.sortAsc ? '↑' : '↓') : ''}}
+          </th>
+          <th class="right">Capacity</th>
+          <th>Used Capacity</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat-start="load in vm.filtered track by load.id"
+            ng-class="{'row-expanded': vm.expandedId === load.id, 'row-even': $even, 'row-odd': $odd}"
+            style="cursor:pointer"
+            ng-click="vm.toggleExpand(load)">
+          <td style="padding:12px 10px 12px 16px;width:28px">
+            <svg class="expand-chevron" ng-class="{open: vm.expandedId === load.id}"
+                 width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="m9 18 6-6-6-6"/>
+            </svg>
+          </td>
+          <td class="mono accent nowrap">{{load.id}}</td>
+          <td class="mono muted nowrap">{{(load.created_at | date:'yyyy-MM-dd') || '—'}}</td>
+          <td>{{load.destination || '—'}}</td>
+          <td class="mono right nowrap">{{vm.fmtTons(load.total_weight_tons)}}</td>
+          <td class="mono right nowrap">{{load.truck_capacity_tons}} t</td>
+          <td style="min-width:140px">
+            <capacity-bar
+              used="load.total_weight_tons | 0"
+              total="load.truck_capacity_tons">
+            </capacity-bar>
+          </td>
+          <td class="nowrap">
+            <load-status-badge status="{{load.status}}"></load-status-badge>
+            <button class="action-transition-btn"
+                    ng-if="vm.nextTransitionLabel(load)"
+                    ng-click="$event.stopPropagation(); vm.applyTransition(load)">
+              {{vm.nextTransitionLabel(load)}}
+            </button>
+          </td>
+        </tr>
+        <tr ng-repeat-end ng-if="vm.expandedId === load.id">
+          <td colspan="8" style="padding:0">
+            <div class="expand-panel">
+              <table>
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <th class="sub-th">Code</th>
+                    <th class="sub-th">Description</th>
+                    <th class="sub-th">Client</th>
+                    <th class="sub-th right">Pieces</th>
+                    <th class="sub-th right">Tonnage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr ng-repeat="item in vm.itemsCache[load.id] track by item.stock_label_id"
+                      style="border-bottom:1px solid var(--border)">
+                    <td class="sub-td mono accent">{{item.item_code || item.stock_label_id}}</td>
+                    <td class="sub-td" style="font-size:13px;font-weight:500">{{item.description || '—'}}</td>
+                    <td class="sub-td" style="font-size:12px;color:var(--text-muted)">{{item.customer || '—'}}</td>
+                    <td class="sub-td mono right">{{item.piece_count || '—'}}</td>
+                    <td class="sub-td mono right">{{item.volume_tons ? (item.volume_tons | number:3) + ' t' : '—'}}</td>
+                  </tr>
+                  <tr class="sub-total">
+                    <td colspan="3" class="sub-td mono" style="font-size:10px;color:var(--text-dim);letter-spacing:0.08em">TOTAL</td>
+                    <td class="sub-td mono right" style="font-size:12px;font-weight:700">{{vm.loadTotalPcs(load.id)}}</td>
+                    <td class="sub-td mono right" style="font-size:12px;font-weight:700">{{vm.fmtTons(vm.loadTotalTons(load.id))}}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
