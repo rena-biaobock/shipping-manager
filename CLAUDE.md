@@ -10,15 +10,15 @@ Guidance for Claude Code when working in this repository.
 
 ```
 ┌─────────────────┐     REST/JSON     ┌──────────────────┐
-│  AngularJS      │ ◄───────────────► │  Python FastAPI  │
-│  (Dashboard)    │                   │  (API)           │
+│  AngularJS      │ ◄───────────────► │ Progress PASOE   │
+│  (Dashboard)    │                   │  (REST API)      │
 └─────────────────┘                   └────────┬─────────┘
                                                │
                                     ┌──────────┴──────────┐
                                     │                     │
                               ┌─────▼──────┐     ┌───────▼──────┐
-                              │ PostgreSQL  │     │    Redis      │
-                              │ (primary)  │     │ (cache/queue) │
+                              │ OpenEdge   │     │  Background  │
+                              │    DB      │     │   Agents     │
                               └────────────┘     └──────────────┘
 ```
 
@@ -37,17 +37,16 @@ Two core objectives:
 ### Back-end
 | Component | Choice |
 |-----------|--------|
-| Language | Python 3.12 |
-| Framework | FastAPI |
-| ORM | SQLAlchemy 2.x (async) |
-| Migrations | Alembic |
-| Validation | Pydantic v2 |
-| Task queue | Celery + Redis |
-| Auth | JWT (python-jose) |
-| Testing | pytest + pytest-asyncio + httpx |
-| Style | Black + Flake8 + isort |
-| Security | Bandit |
-| Vulnerability scan | pip-audit |
+| Language | Progress ABL (OpenEdge 12.x) |
+| App server | PASOE (Progress Application Server for OpenEdge) |
+| Database | OpenEdge RDBMS (schema defined via `.df` files) |
+| Schema migration | `.df` delta files applied with `proutil -C updatedb` |
+| REST layer | PASOE Web Handlers (`OpenEdge.Web.WebHandler` subclasses) |
+| JSON | `OpenEdge.Core.Json.*` / `Progress.Json.ObjectModel.*` |
+| Auth | JWT validated via custom `IWebAuthFilter` implementation |
+| Background jobs | PASOE scheduled background agents (`.p` procedures) |
+| Testing | ABLUnit |
+| Style | ABLint |
 
 ### Front-end
 | Component | Choice |
@@ -65,8 +64,7 @@ Two core objectives:
 ### Infrastructure
 | Component | Choice |
 |-----------|--------|
-| Database | PostgreSQL 16 |
-| Cache / Queue broker | Redis 7 |
+| Database | OpenEdge RDBMS 12.x |
 | Containerisation | Docker + Docker Compose |
 | CI | GitHub Actions |
 
@@ -78,15 +76,14 @@ Full rationale is in [README.md](./README.md). Summary of non-obvious choices:
 
 | Decision | Choice | Why |
 |----------|--------|-----|
-| Back-end framework | FastAPI | Async-native, built-in Pydantic validation, OpenAPI docs. Flask gives nothing; Django gives too much for a pure API. |
-| Database | PostgreSQL | Concurrent write safety, native `JSONB` for position data, DB-level `ENUM` enforcement. |
-| Redis | Cache + Celery broker | One service covers both needs; no reason to run RabbitMQ + Memcached separately. |
-| ORM | SQLAlchemy 2.x async | Sync SQLAlchemy blocks the FastAPI event loop. Tortoise ORM is async but has a less mature migration story. |
-| Migrations | Alembic | `--autogenerate` from ORM models. Standard SQLAlchemy companion. |
-| Task queue | Celery | Retry logic, job visibility, on-demand triggers from the API. Cron alone provides none of these. |
-| Auth | JWT | Single-tenant internal tool; stateless tokens require no session store. |
-| Test HTTP client | httpx `AsyncClient` | Tests FastAPI endpoints in-process without a live server; fully async. |
-| Style linting | Black + Flake8 + isort | One named tool per concern, matching the CI intent. Ruff is a valid alternative. |
+| Back-end platform | Progress OpenEdge / PASOE | Company already runs OpenEdge; PASOE exposes ABL business logic as REST with minimal plumbing. |
+| Database | OpenEdge RDBMS | Native to the Progress stack; schema versioned via `.df` files; no JDBC/ODBC bridge needed. |
+| REST layer | PASOE Web Handlers | First-class ABL class hierarchy; request/response objects + JSON serialization built in. |
+| Schema migration | `.df` delta files | Progress-standard approach; `proutil -C updatedb` applies deltas atomically. |
+| Background jobs | PASOE scheduled agents | Runs inside the same server process; can call any ABL business class directly. |
+| Auth | JWT via `IWebAuthFilter` | Stateless tokens; filter intercepts every request before it reaches the handler. |
+| Testing | ABLUnit | Native ABL unit test runner; integrates with PDSOE and CI via Ant. |
+| Style linting | ABLint | Static analysis for ABL; catches common issues (missing `NO-ERROR`, undeclared variables). |
 | Front-end framework | AngularJS 1.8.x | Fits the team's existing AngularJS familiarity; two-way binding simplifies dashboard filter state without a separate state library. |
 | Front-end CSS | Custom CSS variables | The dark dashboard design (`Shipping Manager.html`) uses a fixed palette; a utility framework adds indirection without benefit. |
 | Navigation | Collapsible left sidebar | Three pages (Stock, Loads, Load Generation) need persistent navigation; sidebar scales better than a top bar as items grow, and can be retracted to save horizontal space. |
@@ -102,33 +99,34 @@ Full rationale is in [README.md](./README.md). Summary of non-obvious choices:
 
 ## Environment Variables
 
-### Back-end (`backend/.env`)
-```dotenv
+### Back-end (`backend/conf/openedge.properties`)
+```properties
 # App
-APP_ENV=development          # development | staging | production
-SECRET_KEY=changeme          # JWT signing key
-ACCESS_TOKEN_EXPIRE_MINUTES=60
+psc.as.appdir=shipping_manager
+psc.as.oe.url=http://localhost:8080
 
 # Database
-DATABASE_URL=postgresql+asyncpg://shipping:shipping@localhost:5432/shipping_manager
+psc.as.db.1=-db /data/shipping_manager -H localhost -S 8090
+psc.as.db.connect.wait=30
 
-# Redis
-REDIS_URL=redis://localhost:6379/0
+# CORS — comma-separated allowed origins
+shipping.cors.allowed-origins=http://localhost:8080
 
-# CORS
-ALLOWED_ORIGINS=http://localhost:8080
+# JWT
+shipping.jwt.secret=changeme
+shipping.jwt.expire-minutes=60
 
 # Pagination
-DEFAULT_PAGE_SIZE=25
-MAX_PAGE_SIZE=100
+shipping.page.default-size=25
+shipping.page.max-size=100
 
-# Idle threshold (days without scanning before a label is flagged as idle)
-IDLE_SCAN_THRESHOLD_DAYS=30
+# Idle threshold (days without a scan before a label is flagged as idle)
+shipping.idle.threshold-days=30
 ```
 
 ### Front-end (`frontend/.env`)
 ```dotenv
-API_BASE_URL=http://localhost:8000/api/v1
+API_BASE_URL=http://localhost:8080/web/api/v1
 ```
 
 ---
@@ -138,56 +136,44 @@ API_BASE_URL=http://localhost:8000/api/v1
 ```
 shipping-manager/
 ├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   │   └── v1/
-│   │   │       ├── routes/
-│   │   │       │   ├── stock_labels.py   # physical labels / inventory
-│   │   │       │   ├── loads.py          # load plans
-│   │   │       │   └── bin_packing.py
-│   │   │       └── router.py
-│   │   ├── core/
-│   │   │   ├── config.py                 # Settings via pydantic-settings
-│   │   │   ├── database.py               # Async engine + session factory
-│   │   │   └── security.py
-│   │   ├── models/                       # SQLAlchemy ORM models
-│   │   │   ├── base.py
-│   │   │   ├── product.py
-│   │   │   ├── stock_label.py
-│   │   │   ├── order.py
-│   │   │   ├── truck.py
-│   │   │   ├── shipment.py
-│   │   │   └── load_item.py
-│   │   ├── schemas/                      # Pydantic request/response schemas
-│   │   │   ├── product.py
-│   │   │   ├── stock_label.py
-│   │   │   ├── order.py
-│   │   │   ├── truck.py
-│   │   │   ├── shipment.py
-│   │   │   └── bin_packing.py
-│   │   ├── services/
-│   │   │   ├── stock_service.py
-│   │   │   ├── order_service.py
-│   │   │   ├── shipment_service.py
-│   │   │   └── bin_packing_service.py
-│   │   ├── jobs/
-│   │   │   ├── celery_app.py
-│   │   │   ├── stock_snapshot.py
-│   │   │   ├── idle_label_watchdog.py
-│   │   │   └── report_generator.py
-│   │   ├── repositories/
-│   │   └── main.py
+│   ├── src/
+│   │   ├── api/v1/                       # PASOE Web Handlers (REST endpoints)
+│   │   │   ├── StockLabelsHandler.cls    # GET /stock-labels, PATCH status/location
+│   │   │   ├── LoadsHandler.cls          # GET /loads, POST, PATCH status
+│   │   │   └── BinPackingHandler.cls     # POST /bin-packing
+│   │   ├── business/                     # Business logic / services
+│   │   │   ├── StockService.cls
+│   │   │   ├── LoadService.cls
+│   │   │   └── BinPackingService.cls
+│   │   ├── data/                         # Data access (table queries)
+│   │   │   ├── StockLabelRepository.cls
+│   │   │   ├── LoadRepository.cls
+│   │   │   └── LoadItemRepository.cls
+│   │   ├── model/                        # ABL data-transfer classes (request/response)
+│   │   │   ├── StockLabelModel.cls
+│   │   │   ├── LoadModel.cls
+│   │   │   └── BinPackingModel.cls
+│   │   ├── auth/
+│   │   │   └── JwtAuthFilter.cls         # IWebAuthFilter implementation
+│   │   └── jobs/                         # Scheduled background agents
+│   │       ├── StockSnapshotAgent.p      # Daily 02:00
+│   │       ├── IdleWatchdogAgent.p       # Every 15 min
+│   │       └── ReportGeneratorAgent.p    # Monday 06:00
+│   ├── schema/
+│   │   ├── shipping_manager.df           # Full OpenEdge DB schema
+│   │   └── migrations/                  # Delta .df files per version
+│   │       └── v2.0.0.df
 │   ├── tests/
-│   │   ├── unit/
-│   │   │   └── services/
-│   │   ├── integration/
-│   │   │   └── api/
-│   │   └── conftest.py
-│   ├── alembic/
-│   │   └── versions/
-│   ├── alembic.ini
-│   ├── requirements.txt
-│   ├── requirements-dev.txt
+│   │   ├── unit/                         # ABLUnit test cases
+│   │   │   ├── TestStockService.cls
+│   │   │   ├── TestLoadService.cls
+│   │   │   └── TestBinPackingService.cls
+│   │   └── integration/                  # End-to-end handler tests
+│   ├── conf/
+│   │   └── openedge.properties           # PASOE configuration
+│   ├── WEB-INF/
+│   │   └── web.xml                       # Servlet + route mapping
+│   ├── build.xml                         # Ant build file (compile, test, package)
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
@@ -222,44 +208,46 @@ shipping-manager/
 
 ## Database Schemas
 
+Schema is defined in `backend/schema/shipping_manager.df` (OpenEdge Data Definition file). The logical structure below is for reference; the `.df` file is authoritative.
+
 ### `products` — steel pipe / component catalogue
 One row per unique product code (`item_code`). The `description` field encodes pipe specs as `{OD}x{wall}x{length}-{standard}-{class} {threading} {treatment}` (e.g. `60,30x3,00x6000-NBR5580-CL Rir BSP Galv`).
 
-```sql
-id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
-item_code         VARCHAR(32) UNIQUE NOT NULL     -- source: "Item"
-description       VARCHAR(512) NOT NULL           -- source: "Descricao"
-nominal_length_m  NUMERIC(8,2)                    -- 6.0 or 12.0 for pipes
-standard          VARCHAR(64)                     -- NBR5580, API5L, ASTM A572, …
-active            BOOLEAN DEFAULT TRUE
-created_at        TIMESTAMPTZ DEFAULT now()
-updated_at        TIMESTAMPTZ DEFAULT now()
+```
+id                CHARACTER(36)   /* GUID, primary key */
+item_code         CHARACTER(32)   /* UNIQUE, source: "Item" */
+description       CHARACTER(512)  /* source: "Descricao" */
+nominal_length_m  DECIMAL(8,2)    /* 6.0 or 12.0 for pipes */
+standard          CHARACTER(64)   /* NBR5580, API5L, ASTM A572, … */
+active            LOGICAL INITIAL TRUE
+created_at        DATETIME-TZ
+updated_at        DATETIME-TZ
 ```
 
 ### `stock_labels` — physical inventory labels (one row = one barcode tag)
 Each label represents a physical bundle of one product sitting in a warehouse location.
 
-```sql
-progressivo         VARCHAR(64) PRIMARY KEY        -- source: "progressivo" (barcode)
-product_id          UUID REFERENCES products(id)
-customer_item_ref   VARCHAR(128)                   -- source: "Cliente Item"
-actual_length_m     NUMERIC(8,3)                   -- source: "Comprimento Real" (may be NULL for plates/fittings)
-warehouse_code      VARCHAR(32) NOT NULL           -- source: "Deposito"  (e.g. '2', 'A12', 'B08')
-address             VARCHAR(32)                    -- source: "Endereço"  (rack/bin, e.g. 'E10', 'J16')
-location_detail     VARCHAR(128)                   -- source: "Localizacao"
-market_type         market_type NOT NULL           -- enum: MI | ME
-is_standard_bundle  BOOLEAN                        -- source: "Fardo Padrão"
-volume_tons         NUMERIC(10,4) NOT NULL         -- source: "Volume Geral" (metric tons)
-piece_count         INTEGER NOT NULL               -- source: "Qt PC"
-status              label_status NOT NULL          -- see enum below
-order_id            UUID REFERENCES orders(id)     -- NULL when has_order = false
-embarque_id         VARCHAR(32)                    -- source: "Embarque Fifo" / "Embarque Etiq" (shipment ref when non-zero)
-scan_count          INTEGER DEFAULT 0              -- source: "Qtd Escaneamentos"
-last_scanned_at     TIMESTAMPTZ                    -- source: "Ultimo Escaneamento" (convert from Excel serial float)
-days_without_scan   INTEGER                        -- source: "Dias sem Escanear" (denormalised for queries)
-avg_days_idle       INTEGER                        -- source: "Média dias Parado"
-created_at          TIMESTAMPTZ DEFAULT now()
-updated_at          TIMESTAMPTZ DEFAULT now()
+```
+progressivo         CHARACTER(64)   /* primary key — source: "progressivo" (barcode) */
+product_id          CHARACTER(36)   /* FK → products.id */
+customer_item_ref   CHARACTER(128)  /* source: "Cliente Item" */
+actual_length_m     DECIMAL(8,3)    /* source: "Comprimento Real" (? for plates/fittings) */
+warehouse_code      CHARACTER(32)   /* source: "Deposito" (e.g. '2', 'A12', 'B08') */
+address             CHARACTER(32)   /* source: "Endereço" (rack/bin, e.g. 'E10', 'J16') */
+location_detail     CHARACTER(128)  /* source: "Localizacao" */
+market_type         CHARACTER(2)    /* MI | ME */
+is_standard_bundle  LOGICAL         /* source: "Fardo Padrão" */
+volume_tons         DECIMAL(10,4)   /* source: "Volume Geral" (metric tons) */
+piece_count         INTEGER         /* source: "Qt PC" */
+status              CHARACTER(32)   /* see valid values below */
+order_id            CHARACTER(36)   /* FK → orders.id; ? when no order */
+embarque_id         CHARACTER(32)   /* source: "Embarque Fifo" / "Embarque Etiq" */
+scan_count          INTEGER INITIAL 0  /* source: "Qtd Escaneamentos" */
+last_scanned_at     DATETIME-TZ     /* source: "Ultimo Escaneamento" (converted from Excel serial) */
+days_without_scan   INTEGER         /* source: "Dias sem Escanear" (denormalised) */
+avg_days_idle       INTEGER         /* source: "Média dias Parado" */
+created_at          DATETIME-TZ
+updated_at          DATETIME-TZ
 ```
 
 **`label_status` enum:** `available` | `reserved` | `in_shipment` | `delivered` | `idle` | `damaged`
@@ -271,67 +259,67 @@ Derivation from source data:
 - `idle` — flagged by watchdog when `Dias sem Escanear ≥ IDLE_SCAN_THRESHOLD_DAYS`
 
 ### `orders` — customer orders
-```sql
-id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
-order_number    VARCHAR(64) UNIQUE NOT NULL    -- source: "Pedido"
-client_order_ref VARCHAR(64)                  -- source: "Ped Cli"
-customer        VARCHAR(255)                  -- source: "Cliente"
-country         VARCHAR(64)                   -- source: "País" (Brasil, Paraguai, Uruguai, Bolivia, Argentina)
-market_type     market_type NOT NULL          -- MI | ME
-condition       order_condition NOT NULL      -- see enum below
-exit_date       DATE                          -- source: "Data Saida Pedido"
-created_at      TIMESTAMPTZ DEFAULT now()
-updated_at      TIMESTAMPTZ DEFAULT now()
+```
+id               CHARACTER(36)   /* GUID primary key */
+order_number     CHARACTER(64)   /* UNIQUE — source: "Pedido" */
+client_order_ref CHARACTER(64)   /* source: "Ped Cli" */
+customer         CHARACTER(255)  /* source: "Cliente" */
+country          CHARACTER(64)   /* Brasil | Paraguai | Uruguai | Bolivia | Argentina */
+market_type      CHARACTER(2)    /* MI | ME */
+condition        CHARACTER(32)   /* see valid values below */
+exit_date        DATE            /* source: "Data Saida Pedido" */
+created_at       DATETIME-TZ
+updated_at       DATETIME-TZ
 ```
 
-**`order_condition` enum:** `fixo_futuro` | `pedido_ate_hoje` | `antecipa_futuro` | `fixo_mes_atual` | `antecipa_mes_atual`
+**`condition` valid values:** `fixo_futuro` | `pedido_ate_hoje` | `antecipa_futuro` | `fixo_mes_atual` | `antecipa_mes_atual`
 
-**`market_type` enum:** `MI` (Mercado Interno / domestic) | `ME` (Mercado Externo / export)
+**`market_type` valid values:** `MI` (Mercado Interno / domestic) | `ME` (Mercado Externo / export)
 
 ### `loads` — truck load plans
 
 Trucks are not tracked as entities. The user selects a fixed capacity class when creating a load. The truck plate is optional free text for reference only.
 
-```sql
-id                  UUID PRIMARY KEY DEFAULT gen_random_uuid()
-truck_capacity_tons NUMERIC(10,3) NOT NULL   -- user-selected: 27 | 31 | 38 (metric tons)
-truck_plate         VARCHAR(32)              -- optional, free text
-status              load_status NOT NULL     -- see enum below
-destination         VARCHAR(255)
-customer            VARCHAR(255)
-total_weight_tons   NUMERIC(10,3)            -- sum of assigned load_items.volume_tons
-created_at          TIMESTAMPTZ DEFAULT now()
-dispatched_at       TIMESTAMPTZ
-delivered_at        TIMESTAMPTZ
-updated_at          TIMESTAMPTZ DEFAULT now()
+```
+id                  CHARACTER(36)   /* GUID primary key */
+truck_capacity_tons DECIMAL(10,3)   /* user-selected: 27 | 31 | 38 (metric tons) */
+truck_plate         CHARACTER(32)   /* optional, free text */
+status              CHARACTER(32)   /* see valid values below */
+destination         CHARACTER(255)
+customer            CHARACTER(255)
+total_weight_tons   DECIMAL(10,3)   /* sum of assigned load_items.volume_tons */
+created_at          DATETIME-TZ
+dispatched_at       DATETIME-TZ
+delivered_at        DATETIME-TZ
+updated_at          DATETIME-TZ
 ```
 
-**`load_status` enum:** `draft` | `confirmed` | `dispatched` | `delivered` | `cancelled`
+**`status` valid values:** `draft` | `confirmed` | `dispatched` | `delivered` | `cancelled`
 
 ### `load_items` — labels assigned to a load
-```sql
-id                  UUID PRIMARY KEY DEFAULT gen_random_uuid()
-load_id             UUID REFERENCES loads(id)
-stock_label_id      VARCHAR(64) REFERENCES stock_labels(progressivo)
+```
+id             CHARACTER(36)  /* GUID primary key */
+load_id        CHARACTER(36)  /* FK → loads.id */
+stock_label_id CHARACTER(64)  /* FK → stock_labels.progressivo */
 ```
 
 ---
 
 ## Services, Jobs, and Models
 
-### Back-end Services
-| Service | Responsibility |
-|---------|---------------|
-| `StockService` | CRUD labels, validate `label_status` transitions, filter by warehouse/product/status |
-| `LoadService` | Create/confirm/dispatch loads, aggregate `volume_tons` against `truck_capacity_tons`, manage `load_status` state machine |
-| `BinPackingService` | Given a set of available labels + a capacity class (27/31/38 t), return an optimal load plan. Primary packing metric: `volume_tons`. Primary dimensional constraint: `actual_length_m`. Available filters: `warehouse_code`, `customer`, `truck_capacity_tons`. Algorithm: FFD on `volume_tons`, verify `actual_length_m` when present, check total ≤ `truck_capacity_tons`. Returns best partial plan flagged as `partial: true` when cap is hit. |
+### Back-end Services (ABL classes in `src/business/`)
+| Class | Responsibility |
+|-------|---------------|
+| `StockService.cls` | CRUD labels, validate `status` transitions, filter by warehouse/product/status |
+| `LoadService.cls` | Create/confirm/dispatch loads, aggregate `volume_tons` against `truck_capacity_tons`, manage load status state machine |
+| `BinPackingService.cls` | Given a set of available labels + a capacity class (27/31/38 t), return an optimal load plan. Primary packing metric: `volume_tons`. Primary dimensional constraint: `actual_length_m`. Available filters: `warehouse_code`, `customer`, `truck_capacity_tons`. Algorithm: FFD on `volume_tons`, verify `actual_length_m` when present, check total ≤ `truck_capacity_tons`. Returns best partial plan flagged as `partial = TRUE` when cap is hit. |
 
-### Celery Jobs
-| Job | Schedule | Purpose |
-|-----|----------|---------|
-| `stock_snapshot` | Daily 02:00 | Snapshot label counts and total volume_tons per warehouse_code + status to a history table |
-| `idle_label_watchdog` | Every 15 min | Set `status = 'idle'` on labels where `days_without_scan ≥ IDLE_SCAN_THRESHOLD_DAYS` |
-| `report_generator` | Monday 06:00 | Generate weekly stock + shipment summary (CSV + PDF) |
+### Background Agents (ABL procedures in `src/jobs/`)
+| Procedure | Schedule | Purpose |
+|-----------|----------|---------|
+| `StockSnapshotAgent.p` | Daily 02:00 | Snapshot label counts and total `volume_tons` per `warehouse_code` + status to a history table |
+| `IdleWatchdogAgent.p` | Every 15 min | Set `status = 'idle'` on labels where `days_without_scan ≥ IDLE_THRESHOLD_DAYS` |
+| `ReportGeneratorAgent.p` | Monday 06:00 | Generate weekly stock + load summary (CSV + PDF) |
 
 ### Front-end Pages & Services
 
@@ -353,35 +341,36 @@ Three pages. Navigation via collapsible left sidebar. All data fetching through 
 
 ## Common Hurdles
 
-### Excel serial date to Python datetime (`Ultimo Escaneamento`)
+### Excel serial date to ABL DATETIME-TZ (`Ultimo Escaneamento`)
 **Problem:** Excel stores dates as floats (days since 1900-01-01, with a leap-year bug). The `Ultimo Escaneamento` column arrives as e.g. `46099.656`.
 **Fix:**
-```python
-from datetime import datetime, timedelta
-EXCEL_EPOCH = datetime(1899, 12, 30)
-def excel_serial_to_dt(serial: float) -> datetime:
-    return EXCEL_EPOCH + timedelta(days=serial)
+```abl
+FUNCTION ExcelSerialToDatetime RETURNS DATETIME-TZ (INPUT pdSerial AS DECIMAL):
+    DEFINE VARIABLE dtBase AS DATE NO-UNDO.
+    dtBase = DATE(12, 30, 1899).
+    RETURN ADD-INTERVAL(DATETIME-TZ(dtBase, 0), INTEGER(pdSerial) - 1, "days").
+END FUNCTION.
 ```
 
-### Async SQLAlchemy session in tests
-**Problem:** `AsyncSession` requires a running event loop; pytest's default loop is torn down between tests.
-**Fix:** Use `pytest-asyncio` with `asyncio_mode = "auto"` in `pytest.ini` and a `session`-scoped `event_loop` fixture. Share one test database across the session; truncate tables between tests, do not recreate the schema.
+### Unknown field value / `?` (unknown) in OpenEdge
+**Problem:** OpenEdge uses `?` (unknown/null) instead of SQL NULL; comparisons with `=` always evaluate to FALSE against `?`.
+**Fix:** Always use `= ?` (not `= ""`) to test for unknown, and initialize decimal fields to `?` (not `0`) when the value is absent. In JSON serialisation, map `?` to JSON `null` explicitly.
 
-### Alembic with async engine
-**Problem:** Alembic's `env.py` is synchronous by default.
-**Fix:** Use `run_async_migrations()` pattern — create a sync engine via `create_engine(url.render_as_string(hide_password=False))` only inside the Alembic migration context, keeping the app's async engine separate.
+### `.df` schema migration on a live database
+**Problem:** `proutil -C updatedb` applies the delta `.df` without downtime only for additive changes (new fields, new tables). Renaming or dropping requires emptying affected areas first.
+**Fix:** Keep migrations purely additive. Mark obsolete fields with a `/* DEPRECATED */` comment in the `.df` and remove them only in a maintenance window with a confirmed empty record set.
 
-### `actual_length_m` is NULL for ~30 % of labels
+### PASOE CORS in development
+**Problem:** Webpack dev server (`:8080`) calls PASOE on the same port; browser blocks cross-origin preflight.
+**Fix:** Add a `CORSFilter` servlet filter in `WEB-INF/web.xml` that sets `Access-Control-Allow-Origin` to the value from `openedge.properties`. Never hardcode `*` as the origin.
+
+### `actual_length_m` is `?` for ~30 % of labels
 **Problem:** Plates, fittings, and other non-pipe items don't have a length.
-**Fix:** In `BinPackingService`, treat `actual_length_m = NULL` as "no length constraint" — only enforce the truck's `length_m` constraint when the field is present.
+**Fix:** In `BinPackingService`, treat `actual_length_m = ?` (unknown) as "no length constraint" — only enforce the truck's length constraint when the field is not `?`.
 
 ### Bin-Packing accuracy vs. performance
 **Problem:** 3D bin-packing is NP-hard; brute-force is too slow for large orders.
-**Fix:** Use FFD on `volume_tons` (dominant metric), then verify `actual_length_m ≤ truck.length_m` per label and cumulative `volume_tons ≤ truck.max_weight_tons`. Expose a `max_iterations` cap and return the best partial solution when the cap is hit, clearly flagging it as `partial`.
-
-### CORS in development
-**Problem:** Webpack dev server (`:8080`) hits FastAPI (`:8000`).
-**Fix:** Set `ALLOWED_ORIGINS=http://localhost:8080` in `.env` and configure `CORSMiddleware` in `main.py`. Do not use `allow_origins=["*"]`.
+**Fix:** Use FFD on `volume_tons` (dominant metric), then verify `actual_length_m ≤ truck-max-length` per label and cumulative `volume_tons ≤ truck-max-weight-tons`. Expose a `max-iterations` cap and return the best partial solution when the cap is hit, clearly flagging it as `partial = TRUE`.
 
 ### AngularJS $digest loop and large datasets
 **Problem:** Two-way binding on a full stock label list causes slow `$digest` cycles when the dataset is large.
@@ -391,12 +380,12 @@ def excel_serial_to_dt(serial: float) -> datetime:
 
 ## Design Patterns
 
-- **Repository pattern** — all DB queries live in `repositories/`; services depend on repository interfaces, not SQLAlchemy directly.
-- **Service layer** — business logic and state machine transitions live in `services/`, never in route handlers.
-- **Schema separation** — distinct Pydantic schemas for Create, Update, Read, and DB model.
-- **State machine for status** — valid transitions declared as a dict; service raises `InvalidTransitionError` for illegal moves.
-- **Feature flags via env** — use `Settings` fields to toggle experimental features (e.g. `ENABLE_3D_VISUALISER=false`).
-- **TDD** — write the failing test first; implement the minimum code to pass; refactor. Red → Green → Refactor on every change.
+- **Repository pattern** — all OpenEdge table queries live in `src/data/` classes; business services depend on repository interfaces, never query tables directly.
+- **Service layer** — business logic and state machine transitions live in `src/business/` classes, never in Web Handler procedures.
+- **Web Handler thin layer** — handlers in `src/api/v1/` parse the JSON request, call one service method, and serialise the response. No business logic there.
+- **State machine for status** — valid transitions declared as a `DEFINE TEMP-TABLE` constant structure; service raises an `AppError` for illegal moves.
+- **Feature flags via properties** — use `openedge.properties` fields to toggle experimental features (e.g. `shipping.enable-3d-visualiser=false`).
+- **TDD** — write the failing ABLUnit test first; implement the minimum code to pass; refactor. Red → Green → Refactor on every change.
 - **XP practices** — short iterations, continuous integration on every commit, pair/review all non-trivial logic, refactor relentlessly.
 - **AngularJS service singleton** — all API calls and client-side aggregation live in services; controllers only bind scope properties and call service methods.
 
@@ -655,11 +644,11 @@ Separate page (not a modal/wizard) for generating and confirming truck loads via
 ## CI Pipeline (runs on every commit)
 
 ```
-Black + Flake8 + isort   →   pip-audit   →   Bandit   →   pytest + Jasmine/Karma
-    (style)                (vulnerabilities) (static sec)        (tests)
+ABLint          →     ABLUnit        →     Jasmine/Karma
+(ABL style)        (back-end tests)     (front-end tests)
 ```
 
-All steps must pass before merge. No `# noqa` or `# nosec` without a justification comment.
+All steps must pass before merge. ABLint suppressions require a comment explaining why.
 
 ---
 
@@ -676,14 +665,14 @@ All steps must pass before merge. No `# noqa` or `# nosec` without a justificati
 
 ## Post-Implementation Checklist
 
-- [ ] All new models have an Alembic migration
+- [ ] All new tables/fields have a delta `.df` file in `schema/migrations/`
 - [ ] All new endpoints have integration tests (happy path + at least one error case)
-- [ ] All new service methods have unit tests written before implementation (TDD)
-- [ ] `label_status` and `load_status` transitions are validated in the service layer
-- [ ] `actual_length_m` NULL case is handled in any code that touches pipe dimensions
-- [ ] Excel serial date fields are always converted via `excel_serial_to_dt()` before persisting
-- [ ] New env variables are documented here and added to `.env.example`
-- [ ] `pip-audit` and `Bandit` return no new findings
+- [ ] All new service methods have ABLUnit tests written before implementation (TDD)
+- [ ] `status` transitions for labels and loads are validated in the service layer
+- [ ] `actual_length_m = ?` (unknown) case is handled in any code that touches pipe dimensions
+- [ ] Excel serial date fields are always converted via `ExcelSerialToDatetime()` before persisting
+- [ ] New config properties are documented here and added to `conf/openedge.properties.example`
+- [ ] ABLint returns no new findings
 - [ ] Front-end API calls go through AngularJS services — no raw `$http` in controllers
 - [ ] `ng-repeat` uses `track by` on the label's natural key
 - [ ] Dashboard summary cards updated to reflect any new stock or load states
@@ -695,20 +684,23 @@ All steps must pass before merge. No `# noqa` or `# nosec` without a justificati
 ## Development Workflow
 
 ```bash
-# Start all services
+# Start PASOE + OpenEdge DB (Docker)
 docker compose up -d
 
-# Run back-end tests
-cd backend && pytest
+# Compile ABL sources
+cd backend && ant compile
+
+# Run ABLUnit tests
+cd backend && ant test
+
+# Apply a schema delta to the running database
+cd backend && $DLC/bin/proutil shipping_manager -C updatedb -df schema/migrations/v2.0.0.df
+
+# Start PASOE in development mode (auto-reload)
+cd backend && ant start-pasoe
 
 # Run front-end tests
 cd frontend && npm test
-
-# Apply migrations
-cd backend && alembic upgrade head
-
-# Create a new migration after model changes
-cd backend && alembic revision --autogenerate -m "describe change"
 
 # Front-end dev server (Webpack)
 cd frontend && npm start
