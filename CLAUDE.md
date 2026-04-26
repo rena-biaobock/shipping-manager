@@ -10,7 +10,7 @@ Guidance for Claude Code when working in this repository.
 
 ```
 ┌─────────────────┐     REST/JSON     ┌──────────────────┐
-│  React + TS     │ ◄───────────────► │  Python FastAPI  │
+│  AngularJS      │ ◄───────────────► │  Python FastAPI  │
 │  (Dashboard)    │                   │  (API)           │
 └─────────────────┘                   └────────┬─────────┘
                                                │
@@ -26,7 +26,9 @@ Guidance for Claude Code when working in this repository.
 
 Two core objectives:
 1. **Stock Control** — label registry with status lifecycle, warehouse location, order assignment, and scan-based idle tracking
-2. **Bin-Packing** — automatic truck load generation using `volume_tons` and `actual_length_m` as constraints, with filters for market type (MI/ME), destination country, and order condition
+2. **Bin-Packing** — automatic truck load generation using `volume_tons` and `actual_length_m` as constraints, with filters for warehouse, client, and truck capacity
+
+**Visual design reference:** `Shipping Manager.html` in the project root — a self-contained React prototype that defines the exact dark-theme dashboard aesthetic (color palette, typography, layout, component shapes) to be reproduced in AngularJS. Use it as the pixel-perfect model; do not deviate from its look and feel.
 
 ---
 
@@ -50,15 +52,15 @@ Two core objectives:
 ### Front-end
 | Component | Choice |
 |-----------|--------|
-| Language | TypeScript 5.x |
-| Framework | React 18 |
-| Build | Vite |
-| UI / Dashboard | shadcn/ui + Recharts |
-| State | Zustand |
-| Data fetching | TanStack Query v5 |
-| Forms | React Hook Form + Zod |
-| Testing | Vitest + React Testing Library |
-| Style | Tailwind CSS |
+| Language | JavaScript (ES6+) |
+| Framework | AngularJS 1.8.x |
+| Build | Webpack 5 |
+| UI / Dashboard | Custom CSS — dark theme matching `Shipping Manager.html` |
+| State | AngularJS services + `$rootScope` events |
+| HTTP | `$http` service |
+| Forms | `ngModel` + custom validators |
+| Testing | Jasmine + Karma |
+| Style | Custom CSS variables (no utility-first framework) |
 
 ### Infrastructure
 | Component | Choice |
@@ -85,11 +87,9 @@ Full rationale is in [README.md](./README.md). Summary of non-obvious choices:
 | Auth | JWT | Single-tenant internal tool; stateless tokens require no session store. |
 | Test HTTP client | httpx `AsyncClient` | Tests FastAPI endpoints in-process without a live server; fully async. |
 | Style linting | Black + Flake8 + isort | One named tool per concern, matching the CI intent. Ruff is a valid alternative. |
-| Front-end UI | shadcn/ui + Recharts | Unstyled composable primitives (you own the code) + the standard React charting library. |
-| State | Zustand | ~10 lines, no reducers, no action creators. Redux is overkill for two data domains. |
-| Server state | TanStack Query v5 | Handles caching, background refetch, and cache invalidation after mutations out of the box. |
-| Forms | React Hook Form + Zod | Zod schema doubles as the TypeScript type; RHF avoids re-renders on every keystroke. |
-| Test runner | Vitest | Native Vite runner — same config, no Babel/ESM workarounds that Jest requires with Vite. |
+| Front-end framework | AngularJS 1.8.x | Fits the team's existing AngularJS familiarity; two-way binding simplifies dashboard filter state without a separate state library. |
+| Front-end CSS | Custom CSS variables | The dark dashboard design (`Shipping Manager.html`) uses a fixed palette; a utility framework adds indirection without benefit. |
+| Navigation | Collapsible left sidebar | Three pages (Stock, Loads, Load Generation) need persistent navigation; sidebar scales better than a top bar as items grow, and can be retracted to save horizontal space. |
 | PK on stock_labels | `progressivo` VARCHAR | The barcode *is* the identity. A surrogate UUID creates two identities for one physical object. |
 | Weight unit | `volume_tons` (not kg) | Source data is in metric tons; confirmed by cross-checking piece count × unit weight. |
 | `actual_length_m` nullable | Yes | ~30% of labels are plates/fittings with no meaningful length. |
@@ -116,7 +116,7 @@ DATABASE_URL=postgresql+asyncpg://shipping:shipping@localhost:5432/shipping_mana
 REDIS_URL=redis://localhost:6379/0
 
 # CORS
-ALLOWED_ORIGINS=http://localhost:5173
+ALLOWED_ORIGINS=http://localhost:8080
 
 # Pagination
 DEFAULT_PAGE_SIZE=25
@@ -128,7 +128,7 @@ IDLE_SCAN_THRESHOLD_DAYS=30
 
 ### Front-end (`frontend/.env`)
 ```dotenv
-VITE_API_BASE_URL=http://localhost:8000/api/v1
+API_BASE_URL=http://localhost:8000/api/v1
 ```
 
 ---
@@ -142,12 +142,8 @@ shipping-manager/
 │   │   ├── api/
 │   │   │   └── v1/
 │   │   │       ├── routes/
-│   │   │       │   ├── auth.py
-│   │   │       │   ├── products.py       # product catalogue
 │   │   │       │   ├── stock_labels.py   # physical labels / inventory
-│   │   │       │   ├── orders.py
-│   │   │       │   ├── trucks.py
-│   │   │       │   ├── shipments.py
+│   │   │       │   ├── loads.py          # load plans
 │   │   │       │   └── bin_packing.py
 │   │   │       └── router.py
 │   │   ├── core/
@@ -195,25 +191,28 @@ shipping-manager/
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── components/
-│   │   │   ├── ui/
-│   │   │   ├── stock/
-│   │   │   └── bin-packing/
-│   │   ├── pages/
-│   │   │   ├── Dashboard.tsx
-│   │   │   ├── Stock.tsx
-│   │   │   ├── Orders.tsx
-│   │   │   ├── Trucks.tsx
-│   │   │   └── Shipments.tsx
-│   │   ├── hooks/
-│   │   ├── services/
-│   │   ├── store/
-│   │   └── types/
-│   ├── public/
+│   │   ├── app/
+│   │   │   ├── components/
+│   │   │   │   ├── sidebar/          # Collapsible sidebar + nav
+│   │   │   │   ├── summary-card/     # TotalCard + BreakdownCard
+│   │   │   │   ├── capacity-bar/     # Capacity fill bar
+│   │   │   │   └── status-badge/     # label_status / load_status badge
+│   │   │   ├── pages/
+│   │   │   │   ├── stock/            # Stock page (controller + template)
+│   │   │   │   ├── loads/            # Loads page (controller + template)
+│   │   │   │   └── load-generation/  # Load Generation page (controller + template)
+│   │   │   ├── services/
+│   │   │   │   ├── stock.service.js
+│   │   │   │   ├── loads.service.js
+│   │   │   │   └── bin-packing.service.js
+│   │   │   └── app.module.js         # AngularJS module + route config
+│   │   ├── styles/
+│   │   │   └── main.css              # CSS variables + global dark theme
+│   │   └── index.html
+│   ├── webpack.config.js
 │   ├── package.json
-│   ├── tsconfig.json
-│   ├── vite.config.ts
 │   └── Dockerfile
+├── Shipping Manager.html             # Visual design reference (do not modify)
 ├── docker-compose.yml
 ├── .env.example
 └── CLAUDE.md
@@ -289,45 +288,31 @@ updated_at      TIMESTAMPTZ DEFAULT now()
 
 **`market_type` enum:** `MI` (Mercado Interno / domestic) | `ME` (Mercado Externo / export)
 
-### `trucks`
-```sql
-id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
-name            VARCHAR(128) NOT NULL
-plate           VARCHAR(32) UNIQUE
-max_weight_tons NUMERIC(10,3) NOT NULL   -- capacity in metric tons (matches volume_tons unit)
-length_m        NUMERIC(8,2) NOT NULL
-width_m         NUMERIC(8,2) NOT NULL
-height_m        NUMERIC(8,2) NOT NULL
-active          BOOLEAN DEFAULT TRUE
-created_at      TIMESTAMPTZ DEFAULT now()
-```
+### `loads` — truck load plans
 
-### `shipments` — confirmed truck load plans
-```sql
-id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
-truck_id          UUID REFERENCES trucks(id)
-status            shipment_status NOT NULL   -- see enum below
-destination       VARCHAR(255)
-customer          VARCHAR(255)
-country           VARCHAR(64)
-market_type       market_type
-notes             TEXT
-total_weight_tons NUMERIC(10,3)
-scheduled_at      TIMESTAMPTZ
-dispatched_at     TIMESTAMPTZ
-delivered_at      TIMESTAMPTZ
-created_at        TIMESTAMPTZ DEFAULT now()
-updated_at        TIMESTAMPTZ DEFAULT now()
-```
+Trucks are not tracked as entities. The user selects a fixed capacity class when creating a load. The truck plate is optional free text for reference only.
 
-**`shipment_status` enum:** `draft` | `confirmed` | `loading` | `dispatched` | `delivered` | `cancelled`
-
-### `load_items` — labels assigned to a shipment
 ```sql
 id                  UUID PRIMARY KEY DEFAULT gen_random_uuid()
-shipment_id         UUID REFERENCES shipments(id)
+truck_capacity_tons NUMERIC(10,3) NOT NULL   -- user-selected: 27 | 31 | 38 (metric tons)
+truck_plate         VARCHAR(32)              -- optional, free text
+status              load_status NOT NULL     -- see enum below
+destination         VARCHAR(255)
+customer            VARCHAR(255)
+total_weight_tons   NUMERIC(10,3)            -- sum of assigned load_items.volume_tons
+created_at          TIMESTAMPTZ DEFAULT now()
+dispatched_at       TIMESTAMPTZ
+delivered_at        TIMESTAMPTZ
+updated_at          TIMESTAMPTZ DEFAULT now()
+```
+
+**`load_status` enum:** `draft` | `confirmed` | `dispatched` | `delivered` | `cancelled`
+
+### `load_items` — labels assigned to a load
+```sql
+id                  UUID PRIMARY KEY DEFAULT gen_random_uuid()
+load_id             UUID REFERENCES loads(id)
 stock_label_id      VARCHAR(64) REFERENCES stock_labels(progressivo)
-position_data       JSONB    -- bin-packing coordinates {x, y, z, rotation}
 ```
 
 ---
@@ -337,10 +322,9 @@ position_data       JSONB    -- bin-packing coordinates {x, y, z, rotation}
 ### Back-end Services
 | Service | Responsibility |
 |---------|---------------|
-| `StockService` | CRUD labels, validate `label_status` transitions, filter by warehouse/product/order/status |
-| `OrderService` | Link/unlink orders to labels, manage `order_condition` transitions |
-| `ShipmentService` | Create/confirm/dispatch shipments, aggregate `volume_tons` against truck capacity |
-| `BinPackingService` | Given a set of labels + a truck, return an optimal load plan. Primary packing metric: `volume_tons`. Primary dimensional constraint: `actual_length_m` (critical — standard pipe lengths are 6 m and 12 m). Available filters: `market_type` (MI/ME), `country`, `order_condition`, `exit_date` range. Algorithm: First Fit Decreasing on `volume_tons`, then verify length fits truck `length_m`, then check total weight ≤ `max_weight_tons`. Returns best partial plan when `max_iterations` cap is hit, flagged as `partial: true`. |
+| `StockService` | CRUD labels, validate `label_status` transitions, filter by warehouse/product/status |
+| `LoadService` | Create/confirm/dispatch loads, aggregate `volume_tons` against `truck_capacity_tons`, manage `load_status` state machine |
+| `BinPackingService` | Given a set of available labels + a capacity class (27/31/38 t), return an optimal load plan. Primary packing metric: `volume_tons`. Primary dimensional constraint: `actual_length_m`. Available filters: `warehouse_code`, `customer`, `truck_capacity_tons`. Algorithm: FFD on `volume_tons`, verify `actual_length_m` when present, check total ≤ `truck_capacity_tons`. Returns best partial plan flagged as `partial: true` when cap is hit. |
 
 ### Celery Jobs
 | Job | Schedule | Purpose |
@@ -349,14 +333,21 @@ position_data       JSONB    -- bin-packing coordinates {x, y, z, rotation}
 | `idle_label_watchdog` | Every 15 min | Set `status = 'idle'` on labels where `days_without_scan ≥ IDLE_SCAN_THRESHOLD_DAYS` |
 | `report_generator` | Monday 06:00 | Generate weekly stock + shipment summary (CSV + PDF) |
 
-### Front-end Pages & Components
-| Page | Key Components |
-|------|---------------|
-| `Dashboard` | KPI cards (total labels, total tons, idle count, reserved), low-stock alerts, recent shipments |
-| `Stock` | Label list with filters (warehouse, status, market_type, idle flag), scan info, status transitions |
-| `Orders` | Order list, link/unlink labels, order condition badge |
-| `Trucks` | Truck capacity cards |
-| `Shipments` | Shipment list, bin-packing wizard (select truck + filters → proposed load), load visualiser |
+### Front-end Pages & Services
+
+Three pages. Navigation via collapsible left sidebar. All data fetching through AngularJS services (no raw `$http` in controllers).
+
+| Page | AngularJS Controller | Purpose |
+|------|---------------------|---------|
+| `Stock` | `StockController` | Read-only label list with summary breakdowns and filters |
+| `Loads` | `LoadsController` | Load list with summary breakdowns, inline item detail, and row search |
+| `Load Generation` | `LoadGenController` | Filter panel + generate + confirm load plans |
+
+| Service | File | Purpose |
+|---------|------|---------|
+| `StockService` | `services/stock.service.js` | `GET /api/v1/stock-labels`, client-side filter/search helpers |
+| `LoadsService` | `services/loads.service.js` | `GET /api/v1/loads`, `GET /api/v1/loads/:id/items`, status transition calls |
+| `BinPackingService` | `services/bin-packing.service.js` | `POST /api/v1/bin-packing` |
 
 ---
 
@@ -388,13 +379,13 @@ def excel_serial_to_dt(serial: float) -> datetime:
 **Problem:** 3D bin-packing is NP-hard; brute-force is too slow for large orders.
 **Fix:** Use FFD on `volume_tons` (dominant metric), then verify `actual_length_m ≤ truck.length_m` per label and cumulative `volume_tons ≤ truck.max_weight_tons`. Expose a `max_iterations` cap and return the best partial solution when the cap is hit, clearly flagging it as `partial`.
 
-### TanStack Query cache invalidation after mutations
-**Problem:** After creating/updating a shipment the stock label list is stale.
-**Fix:** In mutation `onSuccess`, call `queryClient.invalidateQueries({ queryKey: ['stock-labels'] })` alongside the shipment key. Group related keys under a shared prefix.
-
 ### CORS in development
-**Problem:** Vite dev server (`:5173`) hits FastAPI (`:8000`).
-**Fix:** Set `ALLOWED_ORIGINS=http://localhost:5173` in `.env` and configure `CORSMiddleware` in `main.py`. Do not use `allow_origins=["*"]`.
+**Problem:** Webpack dev server (`:8080`) hits FastAPI (`:8000`).
+**Fix:** Set `ALLOWED_ORIGINS=http://localhost:8080` in `.env` and configure `CORSMiddleware` in `main.py`. Do not use `allow_origins=["*"]`.
+
+### AngularJS $digest loop and large datasets
+**Problem:** Two-way binding on a full stock label list causes slow `$digest` cycles when the dataset is large.
+**Fix:** Use `track by` in `ng-repeat` (`track by item.progressivo`), and apply client-side filters via a service method rather than chained AngularJS filters. Run `$scope.$applyAsync()` instead of `$scope.$apply()` when resolving `$http` promises manually.
 
 ---
 
@@ -407,14 +398,265 @@ def excel_serial_to_dt(serial: float) -> datetime:
 - **Feature flags via env** — use `Settings` fields to toggle experimental features (e.g. `ENABLE_3D_VISUALISER=false`).
 - **TDD** — write the failing test first; implement the minimum code to pass; refactor. Red → Green → Refactor on every change.
 - **XP practices** — short iterations, continuous integration on every commit, pair/review all non-trivial logic, refactor relentlessly.
+- **AngularJS service singleton** — all API calls and client-side aggregation live in services; controllers only bind scope properties and call service methods.
+
+---
+
+## Front-end Design
+
+Three pages. Navigation is a **collapsible left sidebar** with a toggle button to retract it. When retracted, the sidebar shows only icons; when expanded, it shows icons + labels.
+
+**Design reference:** reproduce the exact dark theme, typography, color palette, and component shapes from `Shipping Manager.html`. Key CSS variables:
+
+```css
+--bg: #0d0f12;
+--surface: #141720;
+--surface2: #1c2130;
+--surface3: #222840;
+--border: #252c3a;
+--border2: #2e384d;
+--text: #f0f2fa;
+--text-muted: #9ba8c8;
+--text-dim: #5a6890;
+--accent: #f5a623;
+--green: #2ecc8a;
+--yellow: #f5c842;
+--red: #e8435a;
+--blue: #4a9eff;
+--font: 'Space Grotesk', sans-serif;
+--mono: 'Space Mono', monospace;
+```
+
+### Navigation (Sidebar)
+
+```
+┌────────────┐
+│ ShipManager│  ← logo + version
+│ [≡ toggle] │
+├────────────┤
+│ ■ Stock    │  ← active: left accent border + background highlight
+│ ■ Loads    │
+│ ■ Load Gen │
+├────────────┤
+│ Last sync  │  ← footer
+└────────────┘
+```
+
+Active item has a left orange border (`--accent`) and `--surface2` background. Retract button collapses sidebar to icon-only width (48 px). Expand button restores full width (210 px).
+
+---
+
+### Page: Stock
+
+Read-only view of all physical labels in the warehouse.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  [Total Tonnage]  [Tonnage by Country ▬▬]  [Tonnage by Client ▬▬]  │
+│                   [Tonnage by Status ▬▬]                            │
+├─────────────────────────────────────────────────────────────────────┤
+│  [Search…]  [Warehouse ▾]  [Std Bundle ▾]  [Order Condition ▾]      │
+│  [Exit Date from]  [Exit Date to]                                   │
+├─────────────────────────────────────────────────────────────────────┤
+│  Table (paginated, 25 rows default)                                 │
+│  Label | Item Code | Description | Client | Warehouse | Country |  │
+│  Order | Std Bundle | Boarding | Tonnage | Pieces | Condition |     │
+│  Exit Date | NF | Invoice                                           │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Summary cards (top row):**
+
+| Card | Type | Value |
+|------|------|-------|
+| Total Tonnage | `TotalCard` | SUM of `volume_tons` across all labels + total piece count |
+| Tonnage by Country | `BreakdownCard` | Mini bar chart: country → SUM `volume_tons` |
+| Tonnage by Client | `BreakdownCard` | Mini bar chart: customer → SUM `volume_tons` |
+| Tonnage by Status | `BreakdownCard` | Mini bar chart: `label_status` → SUM `volume_tons` |
+
+**Data fetching:** single `GET /api/v1/stock-labels` call. All filtering, search, and KPI aggregation happen client-side.
+
+**Search (client-side, substring, case-insensitive):** matches any of:
+`progressivo`, `item_code`, `description`, `customer`, `country`, `order_number`, `embarque_id`, `nf`, `invoice`
+
+**Fixed filters (client-side):**
+
+| Filter | Type | Options |
+|--------|------|---------|
+| Warehouse | Select | All · (distinct `warehouse_code` values from loaded data) |
+| Standard Bundle | Select | All · Yes · No |
+| Order Condition | Select | All · fixo_futuro · pedido_ate_hoje · antecipa_futuro · fixo_mes_atual · antecipa_mes_atual |
+| Exit Date (from) | Date input | filters `exit_date ≥ from` |
+| Exit Date (to) | Date input | filters `exit_date ≤ to` |
+
+**Table columns:**
+
+| Column | Field | Notes |
+|--------|-------|-------|
+| Label | `progressivo` | mono font, accent color |
+| Item Code | `item_code` | mono font |
+| Description | `description` | |
+| Client | `customer` | muted |
+| Warehouse | `warehouse_code` | mono, muted |
+| Country | `country` | muted |
+| Order | `order_number` | mono, muted |
+| Std Bundle | `is_standard_bundle` | YES (green) / NO (dim) |
+| Boarding | `embarque_id` | muted |
+| Tonnage | `volume_tons` | mono, right-aligned |
+| Pieces | `piece_count` | mono, right-aligned |
+| Condition | `order_condition` | mono |
+| Exit Date | `exit_date` | mono, muted |
+| NF | `nf` | mono, muted |
+| Invoice | `invoice` | mono, muted |
+
+**No mutations on this page.**
+
+---
+
+### Page: Loads
+
+View and manage load plans.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  [Total Tonnage]  [by Country ▬▬]  [by Client ▬▬]  [by Status ▬▬] │
+│                   [by Destination ▬▬]                               │
+├─────────────────────────────────────────────────────────────────────┤
+│  [Search by load id, destination, status…]                          │
+├─────────────────────────────────────────────────────────────────────┤
+│  Table                                                              │
+│  Load ID | Date | Destination | Total Tonnage | Capacity |          │
+│  Used Capacity | Status                                             │
+│  ▶ click row → expands inline showing load items                    │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Summary cards (top row):**
+
+| Card | Type | Value |
+|------|------|-------|
+| Total Tonnage | `TotalCard` | SUM of `total_weight_tons` across all loads + total load count |
+| Tonnage by Country | `BreakdownCard` | Mini bar chart: country (from load items) → SUM `volume_tons` |
+| Tonnage by Client | `BreakdownCard` | Mini bar chart: customer (from load items) → SUM `volume_tons` |
+| Tonnage by Status | `BreakdownCard` | Mini bar chart: `load_status` → SUM `total_weight_tons` |
+| Tonnage by Destination | `BreakdownCard` | Mini bar chart: `destination` → SUM `total_weight_tons` |
+
+**Data fetching:** single `GET /api/v1/loads` call. All aggregation and search happen client-side.
+
+**Search (client-side, substring, case-insensitive):** matches `id`, `destination`, `status`
+
+**Table columns:**
+
+| Column | Field | Notes |
+|--------|-------|-------|
+| Load ID | `id` | mono, accent color |
+| Date | `created_at` | date only, mono, muted |
+| Destination | `destination` | |
+| Total Tonnage | `total_weight_tons` | mono, right-aligned |
+| Capacity | `truck_capacity_tons` | mono, right-aligned |
+| Used Capacity | computed | `CapacityBar` — mini bar showing fill % |
+| Status | `status` | `LoadStatusBadge` |
+
+**Row click → inline expand (below the row):**
+
+The expanded section slides open beneath the clicked row (CSS `expandDown` animation matching the design reference). It shows a nested table of load items:
+
+| Sub-column | Field | Notes |
+|------------|-------|-------|
+| Code | `item_code` | mono, accent |
+| Description | `description` | |
+| Client | `customer` | muted |
+| Pieces | `piece_count` | mono, right-aligned |
+| Tonnage | `volume_tons` | mono, right-aligned |
+
+A totals row (TOTAL) shows sum of pieces and tonnage for the load.
+
+Load items are fetched via `GET /api/v1/loads/:id/items` on first expand, then cached in the controller.
+
+---
+
+### Page: Load Generation
+
+Separate page (not a modal/wizard) for generating and confirming truck loads via bin-packing.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  ── Filters ─────────────────────────────────────────────────────── │
+│  [Warehouse ▾]  [Client ▾]  [27 t] [31 t] [38 t]  [⟳ GENERATE]    │
+├─────────────────────────────────────────────────────────────────────┤
+│  Results table (appears after generation)                           │
+│  Load | Items | Total Pieces | Total Tonnage | Used Capacity |      │
+│  Destination | Action                                               │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Filters:**
+
+| Filter | Type | Notes |
+|--------|------|-------|
+| Warehouse | Select | All · (distinct `warehouse_code` values) |
+| Client | Select | All · (distinct `customer` values) |
+| Max Tonnage | Button group | `[27 t]` `[31 t]` `[38 t]` — single select, required |
+
+**Generate button:** calls `POST /api/v1/bin-packing` with filters and selected capacity. Displays results in the table below.
+
+**Results table columns:**
+
+| Column | Notes |
+|--------|-------|
+| Load | Generated load ID + truck capacity label |
+| Items | List of item codes + truncated descriptions |
+| Total Pieces | Sum of `piece_count` |
+| Total Tonnage | Sum of `volume_tons`, bold |
+| Used Capacity | `CapacityBar` |
+| Destination | Text input (required before confirming) |
+| Action | `CONFIRM` button — disabled until destination is filled; turns to `CONFIRMED` badge after confirm |
+
+**Confirm action:** calls `POST /api/v1/loads` to create the load with `status = draft`. Labels transition to `in_shipment`. Confirmed rows become read-only with a green CONFIRMED badge.
+
+---
+
+### Shared Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `TotalCard` | `components/summary-card/total-card.html` | Large number card (label + value + sub-label) |
+| `BreakdownCard` | `components/summary-card/breakdown-card.html` | Mini horizontal bar chart by dimension |
+| `StatusBadge` | `components/status-badge/status-badge.html` | Dot + label badge for `label_status` |
+| `LoadStatusBadge` | `components/status-badge/load-status-badge.html` | Dot + label badge for `load_status` |
+| `CapacityBar` | `components/capacity-bar/capacity-bar.html` | Fill bar with percentage label |
+| `Sidebar` | `components/sidebar/sidebar.html` | Collapsible nav sidebar |
+
+### Status Color Map
+
+**`label_status`:**
+
+| Status | Color |
+|--------|-------|
+| available | `--green` |
+| reserved | `--yellow` |
+| in_shipment | `--blue` |
+| idle | `--accent` (orange) |
+| delivered | `--text-muted` (gray) |
+| damaged | `--red` |
+
+**`load_status`:**
+
+| Status | Color |
+|--------|-------|
+| draft | `--text-muted` (gray) |
+| confirmed | `--green` |
+| dispatched | `--accent` (orange) |
+| delivered | `--blue` |
+| cancelled | `--red` |
 
 ---
 
 ## CI Pipeline (runs on every commit)
 
 ```
-Black + Flake8 + isort   →   pip-audit   →   Bandit   →   pytest + Vitest
-    (style)                (vulnerabilities) (static sec)     (tests)
+Black + Flake8 + isort   →   pip-audit   →   Bandit   →   pytest + Jasmine/Karma
+    (style)                (vulnerabilities) (static sec)        (tests)
 ```
 
 All steps must pass before merge. No `# noqa` or `# nosec` without a justification comment.
@@ -437,15 +679,16 @@ All steps must pass before merge. No `# noqa` or `# nosec` without a justificati
 - [ ] All new models have an Alembic migration
 - [ ] All new endpoints have integration tests (happy path + at least one error case)
 - [ ] All new service methods have unit tests written before implementation (TDD)
-- [ ] `label_status` and `shipment_status` transitions are validated in the service layer
+- [ ] `label_status` and `load_status` transitions are validated in the service layer
 - [ ] `actual_length_m` NULL case is handled in any code that touches pipe dimensions
 - [ ] Excel serial date fields are always converted via `excel_serial_to_dt()` before persisting
 - [ ] New env variables are documented here and added to `.env.example`
 - [ ] `pip-audit` and `Bandit` return no new findings
-- [ ] Front-end API calls go through `services/` — no raw `fetch` in components
-- [ ] TanStack Query keys follow the `['resource', id?]` convention
-- [ ] Dashboard KPIs updated to reflect any new stock or shipment states
+- [ ] Front-end API calls go through AngularJS services — no raw `$http` in controllers
+- [ ] `ng-repeat` uses `track by` on the label's natural key
+- [ ] Dashboard summary cards updated to reflect any new stock or load states
 - [ ] CLAUDE.md updated if architecture, schemas, or environment variables changed
+- [ ] Visual output checked against `Shipping Manager.html` for design fidelity
 
 ---
 
@@ -466,6 +709,9 @@ cd backend && alembic upgrade head
 
 # Create a new migration after model changes
 cd backend && alembic revision --autogenerate -m "describe change"
+
+# Front-end dev server (Webpack)
+cd frontend && npm start
 ```
 
 Commit convention: one commit per feature / refactor / bug-fix / test. Use imperative mood: `add`, `fix`, `refactor`, `test`, `chore`.
