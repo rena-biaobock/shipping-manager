@@ -1,0 +1,453 @@
+ADD TABLE "orders"
+  AREA "Schema Area"
+  DESCRIPTION "Customer orders"
+  DUMP-NAME "orders"
+
+ADD FIELD "id" OF "orders" AS CHARACTER
+  FORMAT "x(36)"
+  INITIAL ""
+  LABEL "ID"
+  POSITION 2
+  MAX-WIDTH 36
+  ORDER 10
+
+ADD FIELD "order_number" OF "orders" AS CHARACTER
+  FORMAT "x(64)"
+  INITIAL ""
+  LABEL "Order Number"
+  POSITION 3
+  MAX-WIDTH 64
+  ORDER 20
+
+ADD FIELD "client_order_ref" OF "orders" AS CHARACTER
+  FORMAT "x(64)"
+  INITIAL "?"
+  LABEL "Client Order Ref"
+  POSITION 4
+  MAX-WIDTH 64
+  ORDER 30
+
+ADD FIELD "customer" OF "orders" AS CHARACTER
+  FORMAT "x(255)"
+  INITIAL "?"
+  LABEL "Customer"
+  POSITION 5
+  MAX-WIDTH 255
+  ORDER 40
+
+ADD FIELD "country" OF "orders" AS CHARACTER
+  FORMAT "x(64)"
+  INITIAL "?"
+  LABEL "Country"
+  POSITION 6
+  MAX-WIDTH 64
+  ORDER 50
+
+ADD FIELD "market_type" OF "orders" AS CHARACTER
+  FORMAT "x(2)"
+  INITIAL ""
+  LABEL "Market Type"
+  POSITION 7
+  MAX-WIDTH 2
+  ORDER 60
+
+ADD FIELD "condition" OF "orders" AS CHARACTER
+  FORMAT "x(32)"
+  INITIAL ""
+  LABEL "Condition"
+  POSITION 8
+  MAX-WIDTH 32
+  ORDER 70
+
+ADD FIELD "exit_date" OF "orders" AS DATE
+  FORMAT "99/99/9999"
+  INITIAL ?
+  LABEL "Exit Date"
+  POSITION 9
+  ORDER 80
+
+ADD FIELD "created_at" OF "orders" AS DATETIME-TZ
+  FORMAT "99/99/9999 HH:MM:SS.SSS+HH:MM"
+  INITIAL ?
+  LABEL "Created At"
+  POSITION 10
+  ORDER 90
+
+ADD FIELD "updated_at" OF "orders" AS DATETIME-TZ
+  FORMAT "99/99/9999 HH:MM:SS.SSS+HH:MM"
+  INITIAL ?
+  LABEL "Updated At"
+  POSITION 11
+  ORDER 100
+
+ADD INDEX "pk_orders" ON "orders"
+  AREA "Schema Area"
+  UNIQUE
+  PRIMARY
+  INDEX-FIELD "id" ASCENDING
+
+ADD INDEX "uk_order_number" ON "orders"
+  AREA "Schema Area"
+  UNIQUE
+  INDEX-FIELD "order_number" ASCENDING
+
+.
+
+ADD TABLE "stock_labels"
+  AREA "Schema Area"
+  DESCRIPTION "Physical inventory labels — one row per barcode tag"
+  DUMP-NAME "stock_labels"
+
+ADD FIELD "progressivo" OF "stock_labels" AS CHARACTER
+  FORMAT "x(64)"
+  INITIAL ""
+  LABEL "Progressivo"
+  POSITION 2
+  MAX-WIDTH 64
+  ORDER 10
+
+ADD FIELD "item_code" OF "stock_labels" AS CHARACTER
+  FORMAT "x(32)"
+  INITIAL ""
+  LABEL "Item Code"
+  POSITION 3
+  MAX-WIDTH 32
+  ORDER 20
+
+ADD FIELD "description" OF "stock_labels" AS CHARACTER
+  FORMAT "x(512)"
+  INITIAL ""
+  LABEL "Description"
+  POSITION 4
+  MAX-WIDTH 512
+  ORDER 30
+
+ADD FIELD "customer_item_ref" OF "stock_labels" AS CHARACTER
+  FORMAT "x(128)"
+  INITIAL "?"
+  LABEL "Customer Item Ref"
+  POSITION 5
+  MAX-WIDTH 128
+  ORDER 40
+
+ADD FIELD "actual_length_m" OF "stock_labels" AS DECIMAL
+  FORMAT "->,>>>,>>9.999"
+  INITIAL ?
+  LABEL "Actual Length (m)"
+  POSITION 6
+  DECIMALS 3
+  ORDER 50
+
+ADD FIELD "market_type" OF "stock_labels" AS CHARACTER
+  FORMAT "x(2)"
+  INITIAL ""
+  LABEL "Market Type"
+  POSITION 7
+  MAX-WIDTH 2
+  ORDER 60
+
+ADD FIELD "volume_tons" OF "stock_labels" AS DECIMAL
+  FORMAT "->,>>>,>>9.9999"
+  INITIAL 0
+  LABEL "Volume (tons)"
+  POSITION 8
+  DECIMALS 4
+  ORDER 70
+
+ADD FIELD "piece_count" OF "stock_labels" AS INTEGER
+  FORMAT ">>>,>>9"
+  INITIAL 0
+  LABEL "Piece Count"
+  POSITION 9
+  ORDER 80
+
+ADD FIELD "status" OF "stock_labels" AS CHARACTER
+  FORMAT "x(32)"
+  INITIAL "available_in_stock"
+  LABEL "Status"
+  POSITION 10
+  MAX-WIDTH 32
+  ORDER 90
+
+ADD FIELD "order_number" OF "stock_labels" AS CHARACTER
+  FORMAT "x(64)"
+  INITIAL "?"
+  LABEL "Order Number"
+  POSITION 11
+  MAX-WIDTH 64
+  ORDER 100
+
+ADD FIELD "order_condition" OF "stock_labels" AS CHARACTER
+  FORMAT "x(32)"
+  INITIAL "?"
+  LABEL "Order Condition"
+  POSITION 12
+  MAX-WIDTH 32
+  ORDER 110
+
+ADD FIELD "country" OF "stock_labels" AS CHARACTER
+  FORMAT "x(64)"
+  INITIAL "?"
+  LABEL "Country"
+  POSITION 13
+  MAX-WIDTH 64
+  ORDER 120
+
+ADD FIELD "exit_date" OF "stock_labels" AS CHARACTER
+  FORMAT "x(10)"
+  INITIAL "?"
+  LABEL "Exit Date"
+  POSITION 14
+  MAX-WIDTH 10
+  ORDER 130
+
+ADD FIELD "embarque_id" OF "stock_labels" AS CHARACTER
+  FORMAT "x(32)"
+  INITIAL "?"
+  LABEL "Embarque ID"
+  POSITION 15
+  MAX-WIDTH 32
+  ORDER 140
+
+ADD FIELD "avg_days_idle" OF "stock_labels" AS INTEGER
+  FORMAT ">>>,>>9"
+  INITIAL ?
+  LABEL "Avg Days Idle"
+  POSITION 16
+  ORDER 150
+
+ADD FIELD "is_standard_bundle" OF "stock_labels" AS LOGICAL
+  FORMAT "yes/no"
+  INITIAL ?
+  LABEL "Standard Bundle"
+  POSITION 17
+  ORDER 160
+
+ADD FIELD "warehouse_code" OF "stock_labels" AS CHARACTER
+  FORMAT "x(32)"
+  INITIAL "?"
+  LABEL "Warehouse Code"
+  POSITION 18
+  MAX-WIDTH 32
+  ORDER 170
+
+ADD FIELD "address" OF "stock_labels" AS CHARACTER
+  FORMAT "x(32)"
+  INITIAL "?"
+  LABEL "Address"
+  POSITION 19
+  MAX-WIDTH 32
+  ORDER 180
+
+ADD FIELD "nf" OF "stock_labels" AS CHARACTER
+  FORMAT "x(64)"
+  INITIAL "?"
+  LABEL "Nota Fiscal"
+  POSITION 20
+  MAX-WIDTH 64
+  ORDER 190
+
+ADD FIELD "invoice" OF "stock_labels" AS CHARACTER
+  FORMAT "x(64)"
+  INITIAL "?"
+  LABEL "Invoice"
+  POSITION 21
+  MAX-WIDTH 64
+  ORDER 200
+
+ADD FIELD "scan_count" OF "stock_labels" AS INTEGER
+  FORMAT ">>>,>>9"
+  INITIAL 0
+  LABEL "Scan Count"
+  POSITION 22
+  ORDER 210
+
+ADD FIELD "last_scanned_at" OF "stock_labels" AS DATETIME-TZ
+  FORMAT "99/99/9999 HH:MM:SS.SSS+HH:MM"
+  INITIAL ?
+  LABEL "Last Scanned At"
+  POSITION 23
+  ORDER 220
+
+ADD FIELD "days_without_scan" OF "stock_labels" AS INTEGER
+  FORMAT ">>>,>>9"
+  INITIAL ?
+  LABEL "Days Without Scan"
+  POSITION 24
+  ORDER 230
+
+ADD FIELD "created_at" OF "stock_labels" AS DATETIME-TZ
+  FORMAT "99/99/9999 HH:MM:SS.SSS+HH:MM"
+  INITIAL ?
+  LABEL "Created At"
+  POSITION 25
+  ORDER 240
+
+ADD FIELD "updated_at" OF "stock_labels" AS DATETIME-TZ
+  FORMAT "99/99/9999 HH:MM:SS.SSS+HH:MM"
+  INITIAL ?
+  LABEL "Updated At"
+  POSITION 26
+  ORDER 250
+
+ADD INDEX "pk_stock_labels" ON "stock_labels"
+  AREA "Schema Area"
+  UNIQUE
+  PRIMARY
+  INDEX-FIELD "progressivo" ASCENDING
+
+ADD INDEX "idx_status" ON "stock_labels"
+  AREA "Schema Area"
+  INDEX-FIELD "status" ASCENDING
+
+ADD INDEX "idx_market_type" ON "stock_labels"
+  AREA "Schema Area"
+  INDEX-FIELD "market_type" ASCENDING
+
+ADD INDEX "idx_warehouse" ON "stock_labels"
+  AREA "Schema Area"
+  INDEX-FIELD "warehouse_code" ASCENDING
+
+.
+
+ADD TABLE "loads"
+  AREA "Schema Area"
+  DESCRIPTION "Truck load plans"
+  DUMP-NAME "loads"
+
+ADD FIELD "id" OF "loads" AS CHARACTER
+  FORMAT "x(36)"
+  INITIAL ""
+  LABEL "ID"
+  POSITION 2
+  MAX-WIDTH 36
+  ORDER 10
+
+ADD FIELD "truck_capacity_tons" OF "loads" AS DECIMAL
+  FORMAT "->,>>>,>>9.999"
+  INITIAL 0
+  LABEL "Truck Capacity (tons)"
+  POSITION 3
+  DECIMALS 3
+  ORDER 20
+
+ADD FIELD "truck_plate" OF "loads" AS CHARACTER
+  FORMAT "x(32)"
+  INITIAL "?"
+  LABEL "Truck Plate"
+  POSITION 4
+  MAX-WIDTH 32
+  ORDER 30
+
+ADD FIELD "status" OF "loads" AS CHARACTER
+  FORMAT "x(32)"
+  INITIAL "draft"
+  LABEL "Status"
+  POSITION 5
+  MAX-WIDTH 32
+  ORDER 40
+
+ADD FIELD "destination" OF "loads" AS CHARACTER
+  FORMAT "x(255)"
+  INITIAL "?"
+  LABEL "Destination"
+  POSITION 6
+  MAX-WIDTH 255
+  ORDER 50
+
+ADD FIELD "customer" OF "loads" AS CHARACTER
+  FORMAT "x(255)"
+  INITIAL "?"
+  LABEL "Customer"
+  POSITION 7
+  MAX-WIDTH 255
+  ORDER 60
+
+ADD FIELD "total_weight_tons" OF "loads" AS DECIMAL
+  FORMAT "->,>>>,>>9.999"
+  INITIAL 0
+  LABEL "Total Weight (tons)"
+  POSITION 8
+  DECIMALS 3
+  ORDER 70
+
+ADD FIELD "created_at" OF "loads" AS DATETIME-TZ
+  FORMAT "99/99/9999 HH:MM:SS.SSS+HH:MM"
+  INITIAL ?
+  LABEL "Created At"
+  POSITION 9
+  ORDER 80
+
+ADD FIELD "dispatched_at" OF "loads" AS DATETIME-TZ
+  FORMAT "99/99/9999 HH:MM:SS.SSS+HH:MM"
+  INITIAL ?
+  LABEL "Dispatched At"
+  POSITION 10
+  ORDER 90
+
+ADD FIELD "delivered_at" OF "loads" AS DATETIME-TZ
+  FORMAT "99/99/9999 HH:MM:SS.SSS+HH:MM"
+  INITIAL ?
+  LABEL "Delivered At"
+  POSITION 11
+  ORDER 100
+
+ADD FIELD "updated_at" OF "loads" AS DATETIME-TZ
+  FORMAT "99/99/9999 HH:MM:SS.SSS+HH:MM"
+  INITIAL ?
+  LABEL "Updated At"
+  POSITION 12
+  ORDER 110
+
+ADD INDEX "pk_loads" ON "loads"
+  AREA "Schema Area"
+  UNIQUE
+  PRIMARY
+  INDEX-FIELD "id" ASCENDING
+
+ADD INDEX "idx_load_status" ON "loads"
+  AREA "Schema Area"
+  INDEX-FIELD "status" ASCENDING
+
+.
+
+ADD TABLE "load_items"
+  AREA "Schema Area"
+  DESCRIPTION "Labels assigned to a load"
+  DUMP-NAME "load_items"
+
+ADD FIELD "id" OF "load_items" AS CHARACTER
+  FORMAT "x(36)"
+  INITIAL ""
+  LABEL "ID"
+  POSITION 2
+  MAX-WIDTH 36
+  ORDER 10
+
+ADD FIELD "load_id" OF "load_items" AS CHARACTER
+  FORMAT "x(36)"
+  INITIAL ""
+  LABEL "Load ID"
+  POSITION 3
+  MAX-WIDTH 36
+  ORDER 20
+
+ADD FIELD "stock_label_id" OF "load_items" AS CHARACTER
+  FORMAT "x(64)"
+  INITIAL ""
+  LABEL "Stock Label ID"
+  POSITION 4
+  MAX-WIDTH 64
+  ORDER 30
+
+ADD INDEX "pk_load_items" ON "load_items"
+  AREA "Schema Area"
+  UNIQUE
+  PRIMARY
+  INDEX-FIELD "id" ASCENDING
+
+ADD INDEX "idx_load_items_load" ON "load_items"
+  AREA "Schema Area"
+  INDEX-FIELD "load_id" ASCENDING
+
+.
