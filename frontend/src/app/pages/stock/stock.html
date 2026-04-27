@@ -81,7 +81,7 @@
       <input class="date-input" type="date" ng-model="vm.filters.exitDateTo" ng-change="vm.applyFilters()" />
     </div>
 
-    <div class="filter-count">{{vm.filtered.length}} / {{vm.labels.length}}</div>
+    <div class="filter-count">{{vm.totalItems}} / {{vm.labels.length}}</div>
   </div>
 
   <div ng-if="vm.loading" style="padding:28px;color:var(--text-muted);font-family:var(--mono);font-size:12px">Loading…</div>
@@ -98,7 +98,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr ng-repeat="l in vm.filtered track by l.progressivo"
+        <tr ng-repeat="l in vm.page track by l.progressivo"
             ng-class="$even ? 'row-even' : 'row-odd'">
           <td class="mono accent nowrap">{{l.progressivo}}</td>
           <td class="mono nowrap">{{l.item_code}}</td>
@@ -124,6 +124,12 @@
         </tr>
       </tbody>
     </table>
+  </div>
+
+  <div class="pagination" ng-if="vm.totalPages > 1">
+    <button class="page-btn" ng-disabled="vm.currentPage === 1" ng-click="vm.goToPage(vm.currentPage - 1)">‹</button>
+    <span class="page-info">{{vm.currentPage}} / {{vm.totalPages}}</span>
+    <button class="page-btn" ng-disabled="vm.currentPage === vm.totalPages" ng-click="vm.goToPage(vm.currentPage + 1)">›</button>
   </div>
 
 </div>

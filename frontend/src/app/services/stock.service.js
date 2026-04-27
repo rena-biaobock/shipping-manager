@@ -47,6 +47,19 @@ angular.module('shippingManager').service('StockService', ['$http', 'API_BASE_UR
       });
     };
 
+    this.paginateLabels = function(labels, page, pageSize) {
+      var total = labels.length;
+      var totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
+      var currentPage = Math.min(Math.max(page, 1), totalPages || 1);
+      var start = (currentPage - 1) * pageSize;
+      return {
+        items: labels.slice(start, start + pageSize),
+        currentPage: currentPage,
+        totalPages: totalPages,
+        totalItems: total,
+      };
+    };
+
     this.aggregateByField = function(labels, field, valueField) {
       var map = {};
       labels.forEach(function(label) {

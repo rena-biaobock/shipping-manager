@@ -46,7 +46,7 @@
       </select>
     </div>
 
-    <div class="filter-count">{{vm.filtered.length}} / {{vm.loads.length}}</div>
+    <div class="filter-count">{{vm.filtered.length}} / {{vm.loads.length}} loads</div>
   </div>
 
   <div ng-if="vm.loading" style="padding:28px;color:var(--text-muted);font-family:var(--mono);font-size:12px">Loading…</div>
@@ -71,7 +71,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr ng-repeat-start="load in vm.filtered track by load.id"
+        <tr ng-repeat-start="load in vm.page track by load.id"
             ng-class="{'row-expanded': vm.expandedId === load.id, 'row-even': $even, 'row-odd': $odd}"
             style="cursor:pointer"
             ng-click="vm.toggleExpand(load)">
@@ -135,6 +135,12 @@
         </tr>
       </tbody>
     </table>
+  </div>
+
+  <div class="pagination" ng-if="vm.totalPages > 1">
+    <button class="page-btn" ng-disabled="vm.currentPage === 1" ng-click="vm.goToPage(vm.currentPage - 1)">‹</button>
+    <span class="page-info">{{vm.currentPage}} / {{vm.totalPages}}</span>
+    <button class="page-btn" ng-disabled="vm.currentPage === vm.totalPages" ng-click="vm.goToPage(vm.currentPage + 1)">›</button>
   </div>
 
 </div>

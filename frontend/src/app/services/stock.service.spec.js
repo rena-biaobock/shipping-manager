@@ -150,4 +150,51 @@ describe('StockService', function() {
       expect(result.length).toBe(2);
     });
   });
+
+  describe('paginateLabels', function() {
+    var bigList;
+
+    beforeEach(function() {
+      bigList = [];
+      for (var i = 0; i < 60; i++) {
+        bigList.push({ progressivo: 'LBL-' + i, volume_tons: '1.0', piece_count: 1 });
+      }
+    });
+
+    it('returns the first page of pageSize items', function() {
+      var result = StockService.paginateLabels(bigList, 1, 25);
+      expect(result.items.length).toBe(25);
+    });
+
+    it('returns items starting at the correct offset', function() {
+      var result = StockService.paginateLabels(bigList, 2, 25);
+      expect(result.items[0].progressivo).toBe('LBL-25');
+    });
+
+    it('returns a partial last page', function() {
+      var result = StockService.paginateLabels(bigList, 3, 25);
+      expect(result.items.length).toBe(10);
+    });
+
+    it('reports the correct totalPages', function() {
+      var result = StockService.paginateLabels(bigList, 1, 25);
+      expect(result.totalPages).toBe(3);
+    });
+
+    it('reports totalItems equal to list length', function() {
+      var result = StockService.paginateLabels(bigList, 1, 25);
+      expect(result.totalItems).toBe(60);
+    });
+
+    it('clamps out-of-range page to last page', function() {
+      var result = StockService.paginateLabels(bigList, 99, 25);
+      expect(result.currentPage).toBe(3);
+    });
+
+    it('returns empty items for an empty list', function() {
+      var result = StockService.paginateLabels([], 1, 25);
+      expect(result.items.length).toBe(0);
+      expect(result.totalPages).toBe(0);
+    });
+  });
 });

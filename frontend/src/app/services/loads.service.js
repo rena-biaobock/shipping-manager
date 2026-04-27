@@ -43,6 +43,19 @@ angular.module('shippingManager').service('LoadsService', ['$http', 'API_BASE_UR
       }, 0);
     };
 
+    this.paginateLoads = function(loads, page, pageSize) {
+      var total = loads.length;
+      var totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
+      var currentPage = Math.min(Math.max(page, 1), totalPages || 1);
+      var start = (currentPage - 1) * pageSize;
+      return {
+        items: loads.slice(start, start + pageSize),
+        currentPage: currentPage,
+        totalPages: totalPages,
+        totalItems: total,
+      };
+    };
+
     var TRANSITIONS = {
       pending: 'in_transit',
       in_transit: 'dispatched',

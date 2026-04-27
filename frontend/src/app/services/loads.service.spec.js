@@ -118,4 +118,46 @@ describe('LoadsService', function() {
       expect(LoadsService.getAvailableTransition({ status: 'draft' })).toBeNull();
     });
   });
+
+  describe('paginateLoads', function() {
+    var bigList;
+
+    beforeEach(function() {
+      bigList = [];
+      for (var i = 0; i < 55; i++) {
+        bigList.push({ id: 'LD-' + i, total_weight_tons: '10.0', status: 'pending' });
+      }
+    });
+
+    it('returns the first page of pageSize items', function() {
+      var result = LoadsService.paginateLoads(bigList, 1, 25);
+      expect(result.items.length).toBe(25);
+    });
+
+    it('returns items starting at the correct offset', function() {
+      var result = LoadsService.paginateLoads(bigList, 2, 25);
+      expect(result.items[0].id).toBe('LD-25');
+    });
+
+    it('returns a partial last page', function() {
+      var result = LoadsService.paginateLoads(bigList, 3, 25);
+      expect(result.items.length).toBe(5);
+    });
+
+    it('reports the correct totalPages', function() {
+      var result = LoadsService.paginateLoads(bigList, 1, 25);
+      expect(result.totalPages).toBe(3);
+    });
+
+    it('clamps out-of-range page to last page', function() {
+      var result = LoadsService.paginateLoads(bigList, 99, 25);
+      expect(result.currentPage).toBe(3);
+    });
+
+    it('returns empty items for an empty list', function() {
+      var result = LoadsService.paginateLoads([], 1, 25);
+      expect(result.items.length).toBe(0);
+      expect(result.totalPages).toBe(0);
+    });
+  });
 });
