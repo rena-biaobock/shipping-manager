@@ -10,15 +10,15 @@ Guidance for Claude Code when working in this repository.
 
 ```
 ┌─────────────────┐     REST/JSON     ┌──────────────────┐
-│  AngularJS      │ ◄───────────────► │ Progress PASOE   │
-│  (Dashboard)    │                   │  (REST API)      │
+│  AngularJS      │ ◄───────────────► │  FastAPI         │
+│  (Dashboard)    │                   │  (Python REST)   │
 └─────────────────┘                   └────────┬─────────┘
                                                │
                                     ┌──────────┴──────────┐
                                     │                     │
                               ┌─────▼──────┐     ┌───────▼──────┐
-                              │ OpenEdge   │     │  Background  │
-                              │    DB      │     │   Agents     │
+                              │ stock.xlsx │     │  In-memory   │
+                              │  (source)  │     │  load store  │
                               └────────────┘     └──────────────┘
 ```
 
@@ -37,16 +37,15 @@ Two core objectives:
 ### Back-end
 | Component | Choice |
 |-----------|--------|
-| Language | Progress ABL (OpenEdge 12.x) |
-| App server | PASOE (Progress Application Server for OpenEdge) |
-| Database | OpenEdge RDBMS (schema defined via `.df` files) |
-| Schema migration | `.df` delta files applied with `proutil -C updatedb` |
-| REST layer | PASOE Web Handlers (`OpenEdge.Web.WebHandler` subclasses) |
-| JSON | `OpenEdge.Core.Json.*` / `Progress.Json.ObjectModel.*` |
-| Auth | JWT validated via custom `IWebAuthFilter` implementation |
-| Background jobs | PASOE scheduled background agents (`.p` procedures) |
-| Testing | ABLUnit |
-| Style | ABLint |
+| Language | Python 3.12 |
+| Framework | FastAPI 0.115 |
+| ASGI server | Uvicorn |
+| Validation | Pydantic v2 |
+| Data source | openpyxl — reads `stock.xlsx` at startup, cached in memory |
+| Load state | In-process dict store (stateless across restarts; DB migration pending) |
+| CORS | FastAPI `CORSMiddleware` |
+| Testing | pytest + FastAPI `TestClient` |
+| Style | ruff (optional) |
 
 ### Front-end
 | Component | Choice |
@@ -64,7 +63,6 @@ Two core objectives:
 ### Infrastructure
 | Component | Choice |
 |-----------|--------|
-| Database | OpenEdge RDBMS 12.x |
 | Containerisation | Docker + Docker Compose |
 | CI | GitHub Actions |
 
@@ -72,56 +70,36 @@ Two core objectives:
 
 ## Architectural Decisions
 
-Full rationale is in [README.md](./README.md). Summary of non-obvious choices:
-
 | Decision | Choice | Why |
 |----------|--------|-----|
-| Back-end platform | Progress OpenEdge / PASOE | Company already runs OpenEdge; PASOE exposes ABL business logic as REST with minimal plumbing. |
-| Database | OpenEdge RDBMS | Native to the Progress stack; schema versioned via `.df` files; no JDBC/ODBC bridge needed. |
-| REST layer | PASOE Web Handlers | First-class ABL class hierarchy; request/response objects + JSON serialization built in. |
-| Schema migration | `.df` delta files | Progress-standard approach; `proutil -C updatedb` applies deltas atomically. |
-| Background jobs | PASOE scheduled agents | Runs inside the same server process; can call any ABL business class directly. |
-| Auth | JWT via `IWebAuthFilter` | Stateless tokens; filter intercepts every request before it reaches the handler. |
-| Testing | ABLUnit | Native ABL unit test runner; integrates with PDSOE and CI via Ant. |
-| Style linting | ABLint | Static analysis for ABL; catches common issues (missing `NO-ERROR`, undeclared variables). |
-| Front-end framework | AngularJS 1.8.x | Fits the team's existing AngularJS familiarity; two-way binding simplifies dashboard filter state without a separate state library. |
-| Front-end CSS | Custom CSS variables | The dark dashboard design (`Shipping Manager.html`) uses a fixed palette; a utility framework adds indirection without benefit. |
-| Navigation | Collapsible left sidebar | Three pages (Stock, Loads, Load Generation) need persistent navigation; sidebar scales better than a top bar as items grow, and can be retracted to save horizontal space. |
-| PK on stock_labels | `progressivo` VARCHAR | The barcode *is* the identity. A surrogate UUID creates two identities for one physical object. |
-| Weight unit | `volume_tons` (not kg) | Source data is in metric tons; confirmed by cross-checking piece count × unit weight. |
-| `actual_length_m` nullable | Yes | ~30% of labels are plates/fittings with no meaningful length. |
+| Back-end language | Python / FastAPI | Standard Python REST stack; type-safe via Pydantic; auto-generated OpenAPI docs; easy onboarding. |
+| Data source | `stock.xlsx` (openpyxl) | Source-of-truth data arrives as Excel exports; no DB migration needed for read path. |
+| Load state | In-memory dict | Simplest possible persistence for the current scope; swapping in SQLite/Postgres is a one-file change to `load_service.py`. |
+| REST prefix | `/web/api/v1/` | Maintains same URL space as the original PASOE design; no frontend changes required. |
 | Bin-packing algorithm | FFD (First Fit Decreasing) | Well-understood heuristic, ≤ 11/9 of optimal, fast enough for real-time use. Exact solvers don't scale. |
+| `actual_length_m` nullable | Yes | ~30% of labels are plates/fittings with no meaningful length. |
+| Weight unit | `volume_tons` (not kg) | Source data is in metric tons; the Excel `Volume Geral` column is in kg and is divided by 1000 on load. |
+| Bin plan response keys | camelCase (`totalTons`, `totalPcs`, `_id`) | AngularJS templates use these names directly; changing them would break the frontend. |
 | `order_condition` | Enum, not free text | Five fixed values drive load prioritisation; free text makes ordering unreliable. |
 | `embarque_id` | VARCHAR ref, not boolean | Source column holds a 7-digit external shipment ID, not a flag. Discarding it breaks reconciliation. |
-| Product description | Single field, not parsed | Non-pipe items have free-form descriptions; parsing rules from one export are fragile. |
+| Front-end framework | AngularJS 1.8.x | Fits the team's existing AngularJS familiarity; two-way binding simplifies dashboard filter state. |
+| Front-end CSS | Custom CSS variables | The dark dashboard design uses a fixed palette; a utility framework adds indirection without benefit. |
+| Navigation | Collapsible left sidebar | Three pages need persistent navigation; sidebar scales better than a top bar and can be retracted. |
 
 ---
 
 ## Environment Variables
 
-### Back-end (`backend/conf/openedge.properties`)
-```properties
-# App
-psc.as.appdir=shipping_manager
-psc.as.oe.url=http://localhost:8080
+### Back-end (set in Docker or `.env`)
+```dotenv
+# Path to the Excel inventory file (mounted volume in Docker)
+XLSX_PATH=/data/stock.xlsx
 
-# Database
-psc.as.db.1=-db /data/shipping_manager -H localhost -S 8090
-psc.as.db.connect.wait=30
+# Comma-separated allowed CORS origins
+CORS_ORIGINS=http://localhost,http://localhost:4200
 
-# CORS — comma-separated allowed origins
-shipping.cors.allowed-origins=http://localhost:8080
-
-# JWT
-shipping.jwt.secret=changeme
-shipping.jwt.expire-minutes=60
-
-# Pagination
-shipping.page.default-size=25
-shipping.page.max-size=100
-
-# Idle threshold (days without a scan before a label is flagged as idle)
-shipping.idle.threshold-days=30
+# Uvicorn port
+PORT=8080
 ```
 
 ### Front-end (`frontend/.env`)
@@ -137,43 +115,27 @@ API_BASE_URL=http://localhost:8080/web/api/v1
 shipping-manager/
 ├── backend/
 │   ├── src/
-│   │   ├── api/v1/                       # PASOE Web Handlers (REST endpoints)
-│   │   │   ├── StockLabelsHandler.cls    # GET /stock-labels, PATCH status/location
-│   │   │   ├── LoadsHandler.cls          # GET /loads, GET /loads/:id/items, POST, PATCH /:id/status
-│   │   │   └── BinPackingHandler.cls     # POST /bin-packing
-│   │   ├── business/                     # Business logic / services
-│   │   │   ├── StockService.cls
-│   │   │   ├── LoadService.cls
-│   │   │   └── BinPackingService.cls
-│   │   ├── data/                         # Data access (table queries)
-│   │   │   ├── StockLabelRepository.cls
-│   │   │   ├── LoadRepository.cls
-│   │   │   └── LoadItemRepository.cls
-│   │   ├── model/                        # ABL data-transfer classes (request/response)
-│   │   │   ├── StockLabelModel.cls
-│   │   │   ├── LoadModel.cls
-│   │   │   └── BinPackingModel.cls
-│   │   ├── auth/
-│   │   │   └── JwtAuthFilter.cls         # IWebAuthFilter implementation
-│   │   └── jobs/                         # Scheduled background agents
-│   │       ├── StockSnapshotAgent.p      # Daily 02:00
-│   │       ├── IdleWatchdogAgent.p       # Every 15 min
-│   │       └── ReportGeneratorAgent.p    # Monday 06:00
-│   ├── schema/
-│   │   ├── shipping_manager.df           # Full OpenEdge DB schema
-│   │   └── migrations/                  # Delta .df files per version
-│   │       └── v2.0.0.df
+│   │   ├── main.py                    # FastAPI app + CORS + router wiring
+│   │   ├── api/
+│   │   │   └── v1/
+│   │   │       ├── stock_labels.py    # GET /web/api/v1/stock-labels
+│   │   │       ├── loads.py           # GET/POST /loads, GET /:id/items, PATCH /:id/status
+│   │   │       └── bin_packing.py     # POST /web/api/v1/bin-packing
+│   │   ├── services/
+│   │   │   ├── ffd.py                 # First Fit Decreasing algorithm
+│   │   │   └── load_service.py        # Load CRUD + status state machine
+│   │   └── data/
+│   │       └── xlsx_loader.py         # openpyxl reader + row mapper + cache
 │   ├── tests/
-│   │   ├── unit/                         # ABLUnit test cases
-│   │   │   ├── TestStockService.cls
-│   │   │   ├── TestLoadService.cls
-│   │   │   └── TestBinPackingService.cls
-│   │   └── integration/                  # End-to-end handler tests
-│   ├── conf/
-│   │   └── openedge.properties           # PASOE configuration
-│   ├── WEB-INF/
-│   │   └── web.xml                       # Servlet + route mapping
-│   ├── build.xml                         # Ant build file (compile, test, package)
+│   │   ├── conftest.py
+│   │   ├── unit/
+│   │   │   ├── test_ffd.py            # FFD algorithm unit tests
+│   │   │   └── test_load_service.py   # Load service unit tests
+│   │   └── integration/
+│   │       └── test_routes.py         # Full HTTP route tests (TestClient + stock.xlsx)
+│   ├── requirements.txt
+│   ├── requirements-dev.txt
+│   ├── pytest.ini
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
@@ -191,216 +153,159 @@ shipping-manager/
 │   │   │   │   ├── stock.service.js
 │   │   │   │   ├── loads.service.js
 │   │   │   │   └── bin-packing.service.js
-│   │   │   └── app.module.js         # AngularJS module + route config
+│   │   │   └── app.module.js
 │   │   ├── styles/
-│   │   │   └── main.css              # CSS variables + global dark theme
+│   │   │   └── main.css
 │   │   └── index.html
 │   ├── webpack.config.js
 │   ├── package.json
 │   └── Dockerfile
 ├── Shipping Manager.html             # Visual design reference (do not modify)
+├── stock.xlsx                        # Inventory source file (mounted into backend container)
 ├── docker-compose.yml
-├── .env.example
 └── CLAUDE.md
 ```
 
 ---
 
-## Database Schemas
+## API Contract
 
-Schema is defined in `backend/schema/shipping_manager.df` (OpenEdge Data Definition file). The logical structure below is for reference; the `.df` file is authoritative.
+All endpoints are prefixed `/web/api/v1/`.
 
-### `products` — steel pipe / component catalogue
-One row per unique product code (`item_code`). The `description` field encodes pipe specs as `{OD}x{wall}x{length}-{standard}-{class} {threading} {treatment}` (e.g. `60,30x3,00x6000-NBR5580-CL Rir BSP Galv`).
+### `GET /stock-labels`
+Returns all labels loaded from `stock.xlsx`. Read-only; no query parameters — all filtering is client-side.
 
-```
-id                CHARACTER(36)   /* GUID, primary key */
-item_code         CHARACTER(32)   /* UNIQUE, source: "Item" */
-description       CHARACTER(512)  /* source: "Descricao" */
-nominal_length_m  DECIMAL(8,2)    /* 6.0 or 12.0 for pipes */
-standard          CHARACTER(64)   /* NBR5580, API5L, ASTM A572, … */
-active            LOGICAL INITIAL TRUE
-created_at        DATETIME-TZ
-updated_at        DATETIME-TZ
-```
+**Response:** `Array<StockLabel>`
 
-### `stock_labels` — physical inventory labels (one row = one barcode tag)
-Each label represents a physical bundle of one product sitting in a warehouse location.
+### `POST /bin-packing`
+Runs FFD on available/reserved labels and returns bin plans.
 
-```
-progressivo         CHARACTER(64)   /* primary key — source: "progressivo" (barcode) */
-product_id          CHARACTER(36)   /* FK → products.id */
-customer_item_ref   CHARACTER(128)  /* source: "Cliente Item" */
-actual_length_m     DECIMAL(8,3)    /* source: "Comprimento Real" (? for plates/fittings) */
-warehouse_code      CHARACTER(32)   /* source: "Deposito" (e.g. '2', 'A12', 'B08') */
-address             CHARACTER(32)   /* source: "Endereço" (rack/bin, e.g. 'E10', 'J16') */
-location_detail     CHARACTER(128)  /* source: "Localizacao" */
-market_type         CHARACTER(2)    /* MI | ME */
-is_standard_bundle  LOGICAL         /* source: "Fardo Padrão" */
-volume_tons         DECIMAL(10,4)   /* source: "Volume Geral" (metric tons) */
-piece_count         INTEGER         /* source: "Qt PC" */
-status              CHARACTER(32)   /* see valid values below */
-order_id            CHARACTER(36)   /* FK → orders.id; ? when no order */
-embarque_id         CHARACTER(32)   /* source: "Embarque Fifo" / "Embarque Etiq" */
-nf                  CHARACTER(64)   /* Nota Fiscal number */
-invoice             CHARACTER(64)   /* commercial invoice number (export) */
-scan_count          INTEGER INITIAL 0  /* source: "Qtd Escaneamentos" */
-last_scanned_at     DATETIME-TZ     /* source: "Ultimo Escaneamento" (converted from Excel serial) */
-days_without_scan   INTEGER         /* source: "Dias sem Escanear" (denormalised) */
-avg_days_idle       INTEGER         /* source: "Média dias Parado" */
-created_at          DATETIME-TZ
-updated_at          DATETIME-TZ
+**Request body:**
+```json
+{
+  "truck_capacity_tons": 27,
+  "max_iterations": 1000,
+  "filters": { "warehouse_code": "A12", "customer": "ACME" }
+}
 ```
 
-**`label_status` enum:** `available_in_stock` | `reserved` | `in_load` | `in_transit_to_terminal` | `available_in_terminal` | `in_transit_to_client` | `delivered` | `idle` | `damaged`
-
-Derivation from source data:
-- `available_in_stock` — `Tem Pedido? = Não`, no embarque; physically in warehouse
-- `reserved` — `Tem Pedido? = Sim`, no embarque yet; allocated to an order but not yet in a load
-- `in_load` — allocated to a confirmed load plan; set automatically when a load is confirmed (US-05, US-15)
-- `in_transit_to_terminal` — load dispatched toward the port/terminal
-- `available_in_terminal` — label arrived at terminal, awaiting vessel or onward transport
-- `in_transit_to_client` — on board vessel or truck en route to client
-- `delivered` — confirmed received by client
-- `idle` — flagged by watchdog when `Dias sem Escanear ≥ IDLE_SCAN_THRESHOLD_DAYS`
-- `damaged` — manually flagged by operator
-
-### `orders` — customer orders
+**Response:** `Array<BinPlan>` where each plan has:
+```json
+{ "_id": "GEN-...", "items": [...], "totalTons": 18.3, "totalPcs": 42, "partial": false, "destination": "" }
 ```
-id               CHARACTER(36)   /* GUID primary key */
-order_number     CHARACTER(64)   /* UNIQUE — source: "Pedido" */
-client_order_ref CHARACTER(64)   /* source: "Ped Cli" */
-customer         CHARACTER(255)  /* source: "Cliente" */
-country          CHARACTER(64)   /* Brasil | Paraguai | Uruguai | Bolivia | Argentina */
-market_type      CHARACTER(2)    /* MI | ME */
-condition        CHARACTER(32)   /* see valid values below */
-exit_date        DATE            /* source: "Data Saida Pedido" */
-created_at       DATETIME-TZ
-updated_at       DATETIME-TZ
-```
+Note: `totalTons` / `totalPcs` use camelCase — the AngularJS templates bind to these names directly.
 
-**`condition` valid values:** `fixo_futuro` | `pedido_ate_hoje` | `antecipa_futuro` | `fixo_mes_atual` | `antecipa_mes_atual`
+### `POST /loads`
+Confirms a generated plan as a load.
 
-**`market_type` valid values:** `MI` (Mercado Interno / domestic) | `ME` (Mercado Externo / export)
+**Request body:** `{ "truck_capacity_tons": 27, "destination": "Porto de Santos", "items": ["PROG001", "PROG002"] }`
 
-### `loads` — truck load plans
+**Response:** `Load` object (no `items` field) + `item_count`. Status is `pending`.
 
-Trucks are not tracked as entities. The user selects a fixed capacity class when creating a load. The truck plate is optional free text for reference only.
+### `GET /loads`
+Returns all loads (no `items` field). All aggregation is client-side.
 
-```
-id                  CHARACTER(36)   /* GUID primary key */
-truck_capacity_tons DECIMAL(10,3)   /* user-selected: 27 | 31 | 38 (metric tons) */
-truck_plate         CHARACTER(32)   /* optional, free text */
-status              CHARACTER(32)   /* see valid values below */
-destination         CHARACTER(255)
-customer            CHARACTER(255)
-total_weight_tons   DECIMAL(10,3)   /* sum of assigned load_items.volume_tons */
-created_at          DATETIME-TZ
-dispatched_at       DATETIME-TZ
-delivered_at        DATETIME-TZ
-updated_at          DATETIME-TZ
-```
+### `GET /loads/:id/items`
+Returns resolved `StockLabel` objects for a load.
 
-**`status` valid values:** `draft` | `pending` | `in_transit` | `dispatched` | `delivered` | `cancelled`
+### `PATCH /loads/:id/status`
+Advances the load through the state machine. No body required.
 
-State machine:
-- `draft` → `pending` — planner confirms the load on the Load Generation page (sets destination)
-- `pending` → `in_transit` — operator marks departure on the Loads page
-- `in_transit` → `dispatched` — operator marks arrival at destination on the Loads page
-- `dispatched` → `delivered` — operator marks final delivery confirmation
-- any → `cancelled` — operator cancels at any stage before delivery
-
-### `load_items` — labels assigned to a load
-```
-id             CHARACTER(36)  /* GUID primary key */
-load_id        CHARACTER(36)  /* FK → loads.id */
-stock_label_id CHARACTER(64)  /* FK → stock_labels.progressivo */
-```
+**State machine:** `pending → in_transit → dispatched → delivered`. Returns 422 when no further transition exists.
 
 ---
 
-## Services, Jobs, and Models
+## Data Model
 
-### Back-end Services (ABL classes in `src/business/`)
-| Class | Responsibility |
-|-------|---------------|
-| `StockService.cls` | CRUD labels, validate `status` transitions, filter by warehouse/product/status |
-| `LoadService.cls` | Create/confirm/dispatch loads, aggregate `volume_tons` against `truck_capacity_tons`, manage load status state machine (`draft → pending → in_transit → dispatched → delivered`); transitions `stock_labels.status` to `in_load` when a load is confirmed |
-| `BinPackingService.cls` | Given a set of available labels + a capacity class (27/31/38 t), return an optimal load plan. Primary packing metric: `volume_tons`. Primary dimensional constraint: `actual_length_m`. Available filters: `warehouse_code`, `customer`, `truck_capacity_tons`. Algorithm: FFD on `volume_tons`, verify `actual_length_m` when present, check total ≤ `truck_capacity_tons`. Returns best partial plan flagged as `partial = TRUE` when cap is hit. |
+### Stock Label fields (from `stock.xlsx`)
 
-### Background Agents (ABL procedures in `src/jobs/`)
-| Procedure | Schedule | Purpose |
-|-----------|----------|---------|
-| `StockSnapshotAgent.p` | Daily 02:00 | Snapshot label counts and total `volume_tons` per `warehouse_code` + status to a history table |
-| `IdleWatchdogAgent.p` | Every 15 min | Set `status = 'idle'` on labels where `days_without_scan ≥ IDLE_THRESHOLD_DAYS` |
-| `ReportGeneratorAgent.p` | Monday 06:00 | Generate weekly stock + load summary (CSV + PDF) |
+| Python key | Excel column | Notes |
+|------------|-------------|-------|
+| `progressivo` | `progressivo` | Primary key — barcode |
+| `item_code` | `Item` | |
+| `description` | `Descricao` | |
+| `customer` | `Cliente Ped` | |
+| `country` | `País` | |
+| `order_number` | `Pedido` | null if no order |
+| `is_standard_bundle` | `Fardo Padrão` | `"Sim"` → `True` |
+| `embarque_id` | `Embarque Etiq` | null when value is `"0"` or empty |
+| `volume_tons` | `Volume Geral` | **divided by 1000** — source is kg |
+| `piece_count` | `Qt PC` | |
+| `order_condition` | `Pedido Condição` | mapped via `_CONDITION_MAP` |
+| `exit_date` | `Data Saida Pedido` | ISO date string or null |
+| `warehouse_code` | `Wharehouse` | |
+| `status` | derived | see derivation below |
 
-### Front-end Pages & Services
+**Status derivation:**
+- `embarque_id` present → `in_transit_to_terminal`
+- `order_number` present → `reserved`
+- otherwise → `available_in_stock`
 
-Three pages. Navigation via collapsible left sidebar. All data fetching through AngularJS services (no raw `$http` in controllers).
+### `label_status` enum
+`available_in_stock` | `reserved` | `in_load` | `in_transit_to_terminal` | `available_in_terminal` | `in_transit_to_client` | `delivered` | `idle` | `damaged`
 
-| Page | AngularJS Controller | Purpose |
-|------|---------------------|---------|
-| `Stock` | `StockController` | Read-only label list with summary breakdowns and filters |
-| `Loads` | `LoadsController` | Load list with summary breakdowns, inline item detail, and row search |
-| `Load Generation` | `LoadGenController` | Filter panel + generate + confirm load plans |
+### `load_status` state machine
+`pending → in_transit → dispatched → delivered` (any → `cancelled` not yet implemented in API)
 
-| Service | File | Purpose |
-|---------|------|---------|
-| `StockService` | `services/stock.service.js` | `GET /api/v1/stock-labels`, client-side filter/search helpers |
-| `LoadsService` | `services/loads.service.js` | `GET /api/v1/loads`, `GET /api/v1/loads/:id/items`, status transition calls |
-| `BinPackingService` | `services/bin-packing.service.js` | `POST /api/v1/bin-packing` |
+---
+
+## Services
+
+### `src/services/ffd.py` — FFD algorithm
+```python
+ffd(labels: list[dict], truck_capacity_tons: float, max_iterations: int = 1000) -> list[dict]
+```
+- Filters eligible items (`volume_tons > 0` and `≤ truck_capacity_tons`)
+- Sorts descending by `volume_tons`
+- Packs into bins; each bin dict: `_id`, `items`, `totalTons`, `totalPcs`, `partial`, `destination`
+- Stops after `max_iterations` items processed
+
+### `src/services/load_service.py` — Load CRUD + state machine
+Module-level `_store: dict[str, dict]` — in-memory, cleared on restart. Key functions:
+- `create_load(...)` → creates load, returns it without `items`
+- `advance_status(load_id)` → advances state machine; raises `ValueError` on illegal transition; returns `None` if not found
+- `clear_store()` — used in tests (`autouse` fixture)
+
+### `src/data/xlsx_loader.py` — Excel reader
+Module-level `_cache` — populated on first call to `load_labels()`, held for the process lifetime. Call `invalidate_cache()` to force reload. `openpyxl` with `read_only=True, data_only=True`.
 
 ---
 
 ## Common Hurdles
 
-### Excel serial date to ABL DATETIME-TZ (`Ultimo Escaneamento`)
-**Problem:** Excel stores dates as floats (days since 1900-01-01, with a leap-year bug). The `Ultimo Escaneamento` column arrives as e.g. `46099.656`.
-**Fix:**
-```abl
-FUNCTION ExcelSerialToDatetime RETURNS DATETIME-TZ (INPUT pdSerial AS DECIMAL):
-    DEFINE VARIABLE dtBase AS DATE NO-UNDO.
-    dtBase = DATE(12, 30, 1899).
-    RETURN ADD-INTERVAL(DATETIME-TZ(dtBase, 0), INTEGER(pdSerial) - 1, "days").
-END FUNCTION.
-```
+### `volume_tons` is in kg in the Excel file
+**Problem:** `Volume Geral` stores kg, not metric tons.
+**Fix:** divide by 1000 in `_map_row`. The integration test `test_volume_tons_is_metric_tons` guards against regression.
 
-### Unknown field value / `?` (unknown) in OpenEdge
-**Problem:** OpenEdge uses `?` (unknown/null) instead of SQL NULL; comparisons with `=` always evaluate to FALSE against `?`.
-**Fix:** Always use `= ?` (not `= ""`) to test for unknown, and initialize decimal fields to `?` (not `0`) when the value is absent. In JSON serialisation, map `?` to JSON `null` explicitly.
-
-### `.df` schema migration on a live database
-**Problem:** `proutil -C updatedb` applies the delta `.df` without downtime only for additive changes (new fields, new tables). Renaming or dropping requires emptying affected areas first.
-**Fix:** Keep migrations purely additive. Mark obsolete fields with a `/* DEPRECATED */` comment in the `.df` and remove them only in a maintenance window with a confirmed empty record set.
-
-### PASOE CORS in development
-**Problem:** Webpack dev server (`:8080`) calls PASOE on the same port; browser blocks cross-origin preflight.
-**Fix:** Add a `CORSFilter` servlet filter in `WEB-INF/web.xml` that sets `Access-Control-Allow-Origin` to the value from `openedge.properties`. Never hardcode `*` as the origin.
-
-### `actual_length_m` is `?` for ~30 % of labels
+### `actual_length_m` is `None` for ~30% of labels
 **Problem:** Plates, fittings, and other non-pipe items don't have a length.
-**Fix:** In `BinPackingService`, treat `actual_length_m = ?` (unknown) as "no length constraint" — only enforce the truck's length constraint when the field is not `?`.
+**Fix:** In `ffd`, treat `actual_length_m = None` as "no length constraint."
 
-### Bin-Packing accuracy vs. performance
-**Problem:** 3D bin-packing is NP-hard; brute-force is too slow for large orders.
-**Fix:** Use FFD on `volume_tons` (dominant metric), then verify `actual_length_m ≤ truck-max-length` per label and cumulative `volume_tons ≤ truck-max-weight-tons`. Expose a `max-iterations` cap and return the best partial solution when the cap is hit, clearly flagging it as `partial = TRUE`.
+### Bin plan response uses camelCase keys
+**Problem:** Python convention is snake_case, but the AngularJS templates bind directly to `plan.totalTons`, `plan.totalPcs`, `plan._id`.
+**Fix:** `ffd()` returns dicts with those exact camelCase keys. Do not rename them.
+
+### Load state is lost on restart
+**Problem:** `_store` is in-process memory.
+**Fix (future):** replace `load_service.py`'s store with SQLite via `sqlite3` or SQLAlchemy. The service interface (`create_load`, `advance_status`, etc.) stays the same.
+
+### CORS in development
+**Problem:** Webpack dev server origin is different from the backend.
+**Fix:** Set `CORS_ORIGINS=http://localhost:4200,http://localhost` in the environment. Never hardcode `*`.
 
 ### AngularJS $digest loop and large datasets
-**Problem:** Two-way binding on a full stock label list causes slow `$digest` cycles when the dataset is large.
-**Fix:** Use `track by` in `ng-repeat` (`track by item.progressivo`), and apply client-side filters via a service method rather than chained AngularJS filters. Run `$scope.$applyAsync()` instead of `$scope.$apply()` when resolving `$http` promises manually.
+**Problem:** Two-way binding on a full stock label list causes slow `$digest` cycles.
+**Fix:** Use `track by` in `ng-repeat` (`track by item.progressivo`), apply client-side filters via service methods.
 
 ---
 
 ## Design Patterns
 
-- **Repository pattern** — all OpenEdge table queries live in `src/data/` classes; business services depend on repository interfaces, never query tables directly.
-- **Service layer** — business logic and state machine transitions live in `src/business/` classes, never in Web Handler procedures.
-- **Web Handler thin layer** — handlers in `src/api/v1/` parse the JSON request, call one service method, and serialise the response. No business logic there.
-- **State machine for status** — valid transitions declared as a `DEFINE TEMP-TABLE` constant structure; service raises an `AppError` for illegal moves.
-- **Feature flags via properties** — use `openedge.properties` fields to toggle experimental features (e.g. `shipping.enable-3d-visualiser=false`).
-- **TDD** — write the failing ABLUnit test first; implement the minimum code to pass; refactor. Red → Green → Refactor on every change.
-- **XP practices** — short iterations, continuous integration on every commit, pair/review all non-trivial logic, refactor relentlessly.
+- **Thin route layer** — `src/api/v1/` handlers parse the request, call one service function, return the result. No business logic in routes.
+- **Service functions** — business logic and state machine transitions live in `src/services/`. Routes and data layer never call each other directly.
+- **Data layer** — `src/data/xlsx_loader.py` is the only place that touches openpyxl. Services never import openpyxl.
+- **State machine for loads** — `_TRANSITIONS` dict in `load_service.py` defines all valid moves; `ValueError` for illegal transitions.
+- **TDD** — write the failing pytest test first; implement the minimum code to pass; refactor. Red → Green → Refactor on every change.
 - **AngularJS service singleton** — all API calls and client-side aggregation live in services; controllers only bind scope properties and call service methods.
 
 ---
@@ -535,101 +440,28 @@ View and manage load plans.
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Summary cards (top row):**
-
-| Card | Type | Value |
-|------|------|-------|
-| Total Tonnage | `TotalCard` | SUM of `total_weight_tons` across all loads + total load count |
-| Tonnage by Country | `BreakdownCard` | Mini bar chart: country (from load items) → SUM `volume_tons` |
-| Tonnage by Client | `BreakdownCard` | Mini bar chart: customer (from load items) → SUM `volume_tons` |
-| Tonnage by Status | `BreakdownCard` | Mini bar chart: `load_status` → SUM `total_weight_tons` |
-| Tonnage by Destination | `BreakdownCard` | Mini bar chart: `destination` → SUM `total_weight_tons` |
-
 **Data fetching:** single `GET /api/v1/loads` call. All aggregation, search, filtering, and sorting happen client-side.
 
-**Search (client-side, substring, case-insensitive):** matches `id`, `destination`, `status`
+**Status action button (per row):** renders the next allowed transition as a button. Calls `PATCH /api/v1/loads/:id/status` on click. Valid transitions: `pending → in_transit`, `in_transit → dispatched`, `dispatched → delivered`.
 
-**Filters (client-side):**
-
-| Filter | Type | Options |
-|--------|------|---------|
-| Status | Select | All · Pending · In Transit · Dispatched · Delivered · Cancelled |
-| Destination | Select | All · (distinct `destination` values from loaded data) |
-
-**Sort:** table is sortable by Date (`created_at`) and Total Tonnage (`total_weight_tons`) — ascending/descending toggle on column header click.
-
-**Table columns:**
-
-| Column | Field | Notes |
-|--------|-------|-------|
-| Load ID | `id` | mono, accent color |
-| Date | `created_at` | date only, mono, muted; sortable |
-| Destination | `destination` | |
-| Total Tonnage | `total_weight_tons` | mono, right-aligned; sortable |
-| Capacity | `truck_capacity_tons` | mono, right-aligned |
-| Used Capacity | computed | `CapacityBar` — mini bar showing fill % |
-| Status | `status` | `LoadStatusBadge` + inline action button |
-
-**Status action button (per row):** renders the next allowed transition as a button next to the badge. Calls `PATCH /api/v1/loads/:id/status` on click. Valid operator-triggered transitions: `pending → in_transit`, `in_transit → dispatched`, `dispatched → delivered`. Delivered and cancelled loads show no action button. Confirmation is required before dispatching (prevents accidental clicks).
-
-**Row click → inline expand (below the row):**
-
-The expanded section slides open beneath the clicked row (CSS `expandDown` animation matching the design reference). It shows a nested table of load items:
-
-| Sub-column | Field | Notes |
-|------------|-------|-------|
-| Code | `item_code` | mono, accent |
-| Description | `description` | |
-| Client | `customer` | muted |
-| Pieces | `piece_count` | mono, right-aligned |
-| Tonnage | `volume_tons` | mono, right-aligned |
-
-A totals row (TOTAL) shows sum of pieces and tonnage for the load.
-
-Load items are fetched via `GET /api/v1/loads/:id/items` on first expand, then cached in the controller.
+**Row click → inline expand:** fetches items via `GET /api/v1/loads/:id/items` on first expand, then cached.
 
 ---
 
 ### Page: Load Generation
 
-Separate page (not a modal/wizard) for generating and confirming truck loads via bin-packing.
-
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  ── Filters ─────────────────────────────────────────────────────── │
 │  [Warehouse ▾]  [Client ▾]  [27 t] [31 t] [38 t]  [⟳ GENERATE]    │
 ├─────────────────────────────────────────────────────────────────────┤
-│  Results table (appears after generation)                           │
-│  Load | Items | Total Pieces | Total Tonnage | Used Capacity |      │
-│  Destination | Action                                               │
+│  Results table: Load | Items | Total Pieces | Total Tonnage |       │
+│  Used Capacity | Destination | Action (CONFIRM)                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Filters:**
+**Generate button:** calls `POST /api/v1/bin-packing`. The response is an array of bin plans; the controller maps each bin into the `vm.generated` array.
 
-| Filter | Type | Notes |
-|--------|------|-------|
-| Warehouse | Select | All · (distinct `warehouse_code` values) |
-| Client | Select | All · (distinct `customer` values) |
-| Max Tonnage | Button group | `[27 t]` `[31 t]` `[38 t]` — single select, required |
-
-**Generate button:** calls `POST /api/v1/bin-packing` with filters and selected capacity. Displays results in the table below.
-
-**Results table columns:**
-
-| Column | Notes |
-|--------|-------|
-| Load | Generated load ID + truck capacity label |
-| Items | List of item codes + truncated descriptions |
-| Total Pieces | Sum of `piece_count` |
-| Total Tonnage | Sum of `volume_tons`, bold |
-| Used Capacity | `CapacityBar` |
-| Destination | Text input (required before confirming) |
-| Action | `CONFIRM` button — disabled until destination is filled; turns to `CONFIRMED` badge after confirm |
-
-**Confirm action:** calls `POST /api/v1/loads` to create the load with `status = pending`. All stock labels in the load transition automatically to `in_load` (server-side, in a single transaction). Confirmed rows become read-only with a green CONFIRMED badge.
-
-**Empty / pre-generation state:** before the first Generate click, the results area shows an empty state: icon + heading "No loads generated yet" + instruction "Select your filters above and click Generate to plan truck loads." No table is rendered.
+**Confirm action:** calls `POST /api/v1/loads` with `status = pending`.
 
 ---
 
@@ -637,8 +469,8 @@ Separate page (not a modal/wizard) for generating and confirming truck loads via
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| `TotalCard` | `components/summary-card/total-card.html` | Large number card (label + value + sub-label) |
-| `BreakdownCard` | `components/summary-card/breakdown-card.html` | Mini horizontal bar chart by dimension |
+| `TotalCard` | `components/summary-card/total-card.html` | Large number card |
+| `BreakdownCard` | `components/summary-card/breakdown-card.html` | Mini horizontal bar chart |
 | `StatusBadge` | `components/status-badge/status-badge.html` | Dot + label badge for `label_status` |
 | `LoadStatusBadge` | `components/status-badge/load-status-badge.html` | Dot + label badge for `load_status` |
 | `CapacityBar` | `components/capacity-bar/capacity-bar.html` | Fill bar with percentage label |
@@ -676,38 +508,24 @@ Separate page (not a modal/wizard) for generating and confirming truck loads via
 ## CI Pipeline (runs on every commit)
 
 ```
-ABLint          →     ABLUnit        →     Jasmine/Karma
-(ABL style)        (back-end tests)     (front-end tests)
+pytest (backend)    →    Jasmine/Karma (frontend)
 ```
 
-All steps must pass before merge. ABLint suppressions require a comment explaining why.
-
----
-
-## Weekly Pipeline
-
-| Day / Time | Job | Output |
-|-----------|-----|--------|
-| Mon 06:00 | `report_generator` | Weekly stock + shipment CSV/PDF |
-| Daily 02:00 | `stock_snapshot` | Appends to history table (label counts + total tons per warehouse + status) |
-| Every 15 min | `idle_label_watchdog` | Sets `status = 'idle'` on labels where `days_without_scan ≥ IDLE_SCAN_THRESHOLD_DAYS` |
-| On demand | `bin_packing` API call | Returns load plan for a given truck + filtered label set |
+All steps must pass before merge.
 
 ---
 
 ## Post-Implementation Checklist
 
-- [ ] All new tables/fields have a delta `.df` file in `schema/migrations/`
 - [ ] All new endpoints have integration tests (happy path + at least one error case)
-- [ ] All new service methods have ABLUnit tests written before implementation (TDD)
-- [ ] `status` transitions for labels and loads are validated in the service layer
-- [ ] `actual_length_m = ?` (unknown) case is handled in any code that touches pipe dimensions
-- [ ] Excel serial date fields are always converted via `ExcelSerialToDatetime()` before persisting
-- [ ] New config properties are documented here and added to `conf/openedge.properties.example`
-- [ ] ABLint returns no new findings
+- [ ] All new service functions have unit tests written before implementation (TDD)
+- [ ] `status` transitions for loads are validated in `load_service.py`, not in routes
+- [ ] `actual_length_m = None` case is handled in any code that touches pipe dimensions
+- [ ] `volume_tons` is always in metric tons (never raw kg from Excel)
+- [ ] New config env vars are documented here and in `docker-compose.yml`
+- [ ] Bin plan response keys remain camelCase (`totalTons`, `totalPcs`, `_id`) — AngularJS templates depend on them
 - [ ] Front-end API calls go through AngularJS services — no raw `$http` in controllers
 - [ ] `ng-repeat` uses `track by` on the label's natural key
-- [ ] Dashboard summary cards updated to reflect any new stock or load states
 - [ ] CLAUDE.md updated if architecture, schemas, or environment variables changed
 - [ ] Visual output checked against `Shipping Manager.html` for design fidelity
 
@@ -716,20 +534,18 @@ All steps must pass before merge. ABLint suppressions require a comment explaini
 ## Development Workflow
 
 ```bash
-# Start PASOE + OpenEdge DB (Docker)
+# Start full stack (Python backend + AngularJS frontend)
 docker compose up -d
 
-# Compile ABL sources
-cd backend && ant compile
+# Run back-end tests (requires stock.xlsx at repo root)
+cd backend
+XLSX_PATH=../stock.xlsx .venv/bin/pytest -v
 
-# Run ABLUnit tests
-cd backend && ant test
+# Install/update Python dependencies
+cd backend && .venv/bin/pip install -r requirements-dev.txt
 
-# Apply a schema delta to the running database
-cd backend && $DLC/bin/proutil shipping_manager -C updatedb -df schema/migrations/v2.0.0.df
-
-# Start PASOE in development mode (auto-reload)
-cd backend && ant start-pasoe
+# Run back-end locally (hot-reload)
+cd backend && XLSX_PATH=../stock.xlsx .venv/bin/uvicorn src.main:app --reload --port 8080
 
 # Run front-end tests
 cd frontend && npm test

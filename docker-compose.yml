@@ -1,12 +1,11 @@
 services:
-  # Node.js / Express mock of the Progress OpenEdge PASOE backend.
-  # Swap build context to ./backend once a licensed openedge:12.7 image is available.
   backend:
-    build: ./backend-mock
+    build: ./backend
     ports:
       - "8080:8080"
     environment:
       CORS_ORIGINS: "http://localhost"
+      XLSX_PATH: "/data/stock.xlsx"
       PORT: "8080"
     volumes:
       - ./stock.xlsx:/data/stock.xlsx:ro

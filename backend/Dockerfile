@@ -1,20 +1,12 @@
-# OpenEdge PASOE back-end image
-# Replace 'your-registry/openedge:12.7' with your actual licensed base image.
-FROM your-registry/openedge:12.7
+FROM python:3.12-slim
 
-WORKDIR /shipping_manager
+WORKDIR /app
 
-COPY src/                    ./src/
-COPY schema/                 ./schema/
-COPY conf/                   ./conf/
-COPY WEB-INF/                ./WEB-INF/
-COPY build.xml               ./build.xml
-COPY docker-entrypoint.sh    /docker-entrypoint.sh
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN chmod +x /docker-entrypoint.sh \
-    && ant compile \
-    && mkdir -p /data /reports
+COPY src/ ./src/
 
 EXPOSE 8080
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]

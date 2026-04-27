@@ -40,8 +40,10 @@ angular.module('shippingManager').controller('LoadGenController',
 
       BinPackingService.generate(apiFilters, vm.maxTons, 1000)
         .then(function(res) {
-          vm.generated = [{ _id: 'GEN-1', destination: '', items: res.data.items,
-            totalTons: res.data.total_weight_tons, partial: res.data.partial }];
+          vm.generated = res.data.map(function(bin) {
+            return { _id: bin._id, destination: '', items: bin.items,
+              totalTons: bin.totalTons, totalPcs: bin.totalPcs, partial: bin.partial };
+          });
           vm.generating = false;
         })
         .catch(function() {
