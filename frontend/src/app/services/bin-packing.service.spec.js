@@ -52,8 +52,8 @@ describe('BinPackingService', function() {
   });
 
   describe('generate', function() {
-    it('POSTs to /bin-packing with truck_capacity_tons and filters', function() {
-      $httpBackend.expectPOST(API_BASE_URL + '/bin-packing', {
+    it('POSTs to /bin-packing/ with truck_capacity_tons and filters', function() {
+      $httpBackend.expectPOST(API_BASE_URL + '/bin-packing/', {
         truck_capacity_tons: 27,
         max_iterations: 1000,
         filters: { warehouse_code: null, customer: null },
@@ -64,7 +64,7 @@ describe('BinPackingService', function() {
     });
 
     it('maps warehouse filter to warehouse_code', function() {
-      $httpBackend.expectPOST(API_BASE_URL + '/bin-packing', {
+      $httpBackend.expectPOST(API_BASE_URL + '/bin-packing/', {
         truck_capacity_tons: 31,
         max_iterations: 1000,
         filters: { warehouse_code: 'A01', customer: null },
@@ -75,7 +75,7 @@ describe('BinPackingService', function() {
     });
 
     it('uses default 1000 max_iterations when not supplied', function() {
-      $httpBackend.expectPOST(API_BASE_URL + '/bin-packing', {
+      $httpBackend.expectPOST(API_BASE_URL + '/bin-packing/', {
         truck_capacity_tons: 38,
         max_iterations: 1000,
         filters: { warehouse_code: null, customer: null },
@@ -87,9 +87,9 @@ describe('BinPackingService', function() {
   });
 
   describe('createLoad', function() {
-    it('POSTs to /loads with progressivo list', function() {
+    it('POSTs to /loads/ with progressivo list', function() {
       var items = [{ progressivo: 'LBL-001' }, { progressivo: 'LBL-002' }];
-      $httpBackend.expectPOST(API_BASE_URL + '/loads', {
+      $httpBackend.expectPOST(API_BASE_URL + '/loads/', {
         truck_capacity_tons: 27,
         destination: 'Porto de Santos',
         items: ['LBL-001', 'LBL-002'],

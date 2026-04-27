@@ -4,7 +4,7 @@ import '../app.module';
 angular.module('shippingManager').service('BinPackingService', ['$http', 'API_BASE_URL',
   function BinPackingService($http, API_BASE_URL) {
     this.generate = function(filters, truckCapacityTons, maxIterations) {
-      return $http.post(API_BASE_URL + '/bin-packing', {
+      return $http.post(API_BASE_URL + '/bin-packing/', {
         truck_capacity_tons: truckCapacityTons,
         max_iterations: maxIterations || 1000,
         filters: {
@@ -15,7 +15,7 @@ angular.module('shippingManager').service('BinPackingService', ['$http', 'API_BA
     };
 
     this.createLoad = function(truckCapacityTons, destination, items) {
-      return $http.post(API_BASE_URL + '/loads', {
+      return $http.post(API_BASE_URL + '/loads/', {
         truck_capacity_tons: truckCapacityTons,
         destination: destination,
         items: items.map(function(i) { return i.progressivo; }),
