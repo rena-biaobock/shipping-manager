@@ -10,7 +10,7 @@ angular.module('shippingManager').directive('capacityBar', function() {
       '  <div class="bar-track">' +
       '    <div class="bar-fill" ng-style="{width: vm.pct + \'%\', background: vm.color}"></div>' +
       '  </div>' +
-      '  <span class="bar-pct">{{vm.pct | number:3}}%</span>' +
+      '  <span class="bar-pct">{{vm.pct | number:2}}%</span>' +
       '</div>',
     controllerAs: 'vm',
     bindToController: true,
