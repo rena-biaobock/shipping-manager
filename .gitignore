@@ -1,0 +1,27 @@
+# Python bytecode (leftover from previous FastAPI backend)
+__pycache__/
+*.py[cod]
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.tool-versions
+
+# OpenEdge database runtime files
+*.bi
+*.ai
+*.lk
+*.lg
+
+# Environment overrides (never commit real secrets)
+.env
+frontend/.env
+
+# Editors
+.vscode/
+*.swp
+*.swo
+
+# macOS / Windows
+.DS_Store
+Thumbs.db

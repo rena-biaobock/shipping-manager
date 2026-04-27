@@ -1,0 +1,121 @@
+<div style="display:flex;flex-direction:column;height:100%;animation:fadeUp 0.35s ease both">
+
+  <div class="page-header">
+    <div class="page-breadcrumb">DASHBOARD / LOADS</div>
+    <h1 class="page-title">Load Management</h1>
+  </div>
+
+  <div class="cards-row">
+    <total-card
+      label="Total Tonnage"
+      value="{{vm.fmtTons(vm.totalTons)}}"
+      sub="{{vm.filtered.length}} loads"
+      accent="var(--accent)">
+    </total-card>
+    <breakdown-card label="Tonnage by Status"      rows="vm.byStatus" accent="var(--yellow)"></breakdown-card>
+    <breakdown-card label="Tonnage by Destination" rows="vm.byDest"   accent="var(--accent)"></breakdown-card>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input class="search-input" ng-model="vm.search" ng-change="vm.applyFilters()"
+             placeholder="Search load ID, destination, status…" />
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Status</div>
+      <select class="filter-select" ng-model="vm.filters.status" ng-change="vm.applyFilters()">
+        <option value="all">All Statuses</option>
+        <option value="draft">Draft</option>
+        <option value="pending">Pending</option>
+        <option value="in_transit">In Transit</option>
+        <option value="dispatched">Dispatched</option>
+        <option value="delivered">Delivered</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Destination</div>
+      <select class="filter-select" ng-model="vm.filters.destination" ng-change="vm.applyFilters()">
+        <option value="all">All Destinations</option>
+        <option ng-repeat="d in vm.destinations" value="{{d}}">{{d}}</option>
+      </select>
+    </div>
+
+    <div class="filter-count">{{vm.filtered.length}} / {{vm.loads.length}} loads</div>
+  </div>
+
+  <div ng-if="vm.loading" style="padding:28px;color:var(--text-muted);font-family:var(--mono);font-size:12px">Loading…</div>
+  <div ng-if="vm.error"   style="padding:28px;color:var(--red);font-family:var(--mono);font-size:12px">{{vm.error}}</div>
+
+  <div class="table-wrap" ng-if="!vm.loading && !vm.error">
+    <table>
+      <thead>
+        <tr>
+          <th>Load ID</th>
+          <th class="sortable" ng-click="vm.setSort('created_at')">
+            Date {{vm.sortField === 'created_at' ? (vm.sortAsc ? '↑' : '↓') : ''}}
+          </th>
+          <th>Destination</th>
+          <th class="right sortable" ng-click="vm.setSort('total_weight_tons')">
+            Total Tonnage {{vm.sortField === 'total_weight_tons' ? (vm.sortAsc ? '↑' : '↓') : ''}}
+          </th>
+          <th class="right">Capacity</th>
+          <th>Used Capacity</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat-start="load in vm.page track by load.id"
+            ng-click="vm.toggleExpand(load)"
+            ng-class="{'row-expanded': vm.expanded[load.id], 'row-even': $even, 'row-odd': $odd}"
+            style="cursor:pointer">
+          <td class="mono accent nowrap">{{load.id}}</td>
+          <td class="mono muted nowrap">{{(load.created_at | date:'yyyy-MM-dd') || '—'}}</td>
+          <td>{{load.destination || '—'}}</td>
+          <td class="mono right nowrap">{{vm.fmtTons(load.total_weight_tons)}}</td>
+          <td class="mono right nowrap">{{load.truck_capacity_tons}} t</td>
+          <td style="min-width:140px">
+            <capacity-bar
+              used="load.total_weight_tons"
+              total="load.truck_capacity_tons">
+            </capacity-bar>
+          </td>
+          <td class="nowrap">
+            <load-status-badge status="{{load.status}}"></load-status-badge>
+            <button class="action-transition-btn"
+                    ng-if="vm.nextTransitionLabel(load)"
+                    ng-click="$event.stopPropagation(); vm.applyTransition(load)">
+              {{vm.nextTransitionLabel(load)}}
+            </button>
+          </td>
+        </tr>
+        <tr ng-repeat-end ng-if="vm.expanded[load.id]">
+          <td colspan="7" style="padding:0">
+            <div class="expand-panel">
+              <div ng-repeat="item in vm.itemsCache[load.id] track by item.progressivo"
+                   style="font-size:12px;color:var(--text-muted);padding:4px 16px;white-space:nowrap">
+                <span style="font-family:var(--mono);font-size:10px;color:var(--accent)">{{item.item_code || item.progressivo}}</span>
+                — {{(item.description || '').slice(0, 48)}}
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-left:8px">{{item.customer || '—'}}</span>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-left:8px">{{item.piece_count || 0}} pcs</span>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-left:8px">{{vm.fmtTons(item.volume_tons)}}</span>
+              </div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination" ng-if="vm.totalPages > 1">
+    <button class="page-btn" ng-disabled="vm.currentPage === 1" ng-click="vm.goToPage(vm.currentPage - 1)">‹</button>
+    <span class="page-info">{{vm.currentPage}} / {{vm.totalPages}}</span>
+    <button class="page-btn" ng-disabled="vm.currentPage === vm.totalPages" ng-click="vm.goToPage(vm.currentPage + 1)">›</button>
+  </div>
+
+</div>

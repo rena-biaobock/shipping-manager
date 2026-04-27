@@ -1,0 +1,16 @@
+{
+  "name": "shipping-manager-backend-mock",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test tests/ffd.test.js tests/routes.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "xlsx": "0.18.5"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0"
+  }
+}
