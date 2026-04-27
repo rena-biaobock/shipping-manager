@@ -15,7 +15,7 @@ module.exports = {
       { test: /\.css$/, use: ['style-loader', 'css-loader'] },
       {
         test: /\.html$/,
-        use: 'html-loader',
+        use: { loader: 'html-loader', options: { esModule: false } },
         exclude: path.resolve(__dirname, 'src/index.html'),
       },
     ],
