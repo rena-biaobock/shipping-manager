@@ -109,7 +109,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); over
 .sidebar-toggle:hover { color: var(--text); }
 
 /* ── Summary cards ──────────────────────────────────────────────────── */
-.cards-row { display: flex; gap: 12px; padding: 18px 12px 8px 28px; flex-shrink: 0; overflow-x: auto; height: 150px; }
+.cards-row { display: flex; gap: 12px; padding: 18px 12px 16px 28px; flex-shrink: 0; overflow-x: auto; height: 150px; }
 
 .total-card {
   background: var(--surface); border: 1px solid var(--border);
@@ -140,7 +140,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); over
   letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 12px;
   flex-shrink: 0;
 }
-.breakdown-card .breakdown-rows { display: flex; flex-direction: column; gap: 7px; overflow-y: auto; flex: 1; }
+.breakdown-card .breakdown-rows { display: flex; flex-direction: column; gap: 7px; overflow-y: auto; flex: 1; padding-bottom: 8px; padding-right: 6px; }
 .breakdown-card .breakdown-row { display: flex; align-items: center; gap: 8px; }
 .breakdown-card .breakdown-key {
   font-size: 11px; color: var(--text-muted); white-space: nowrap;
