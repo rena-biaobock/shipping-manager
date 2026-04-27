@@ -180,7 +180,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); over
 
 /* ── Toolbar ────────────────────────────────────────────────────────── */
 .toolbar {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: flex-end; gap: 10px;
   padding: 14px 28px; flex-shrink: 0; flex-wrap: wrap;
 }
 .search-wrap { position: relative; flex: 0 0 280px; }
