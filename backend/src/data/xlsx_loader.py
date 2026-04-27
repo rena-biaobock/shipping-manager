@@ -1,6 +1,6 @@
 import os
 import openpyxl
-from datetime import date
+from datetime import date, datetime
 
 _CONDITION_MAP = {
     "antecipa futuro": "antecipa_futuro",
@@ -14,9 +14,12 @@ _CONDITION_MAP = {
 }
 
 
+_EMBARQUE_NULLS = frozenset({"0", "", "-"})
+
+
 def _map_row(row: dict) -> dict:
-    embarque_raw = str(row.get("Embarque Etiq") or "0").strip()
-    embarque_id = embarque_raw if embarque_raw not in ("0", "") else None
+    embarque_raw = str(row.get("Embarque Etiq") or "").strip()
+    embarque_id = embarque_raw if embarque_raw not in _EMBARQUE_NULLS else None
     has_pedido = bool(row.get("Pedido"))
 
     if embarque_id:
@@ -28,8 +31,13 @@ def _map_row(row: dict) -> dict:
 
     exit_date = None
     raw_date = row.get("Data Saida Pedido")
-    if isinstance(raw_date, date):
+    if isinstance(raw_date, (date, datetime)):
         exit_date = raw_date.strftime("%Y-%m-%d")
+    elif isinstance(raw_date, str) and raw_date.strip():
+        try:
+            exit_date = datetime.fromisoformat(raw_date.strip().replace(" ", "T")).strftime("%Y-%m-%d")
+        except ValueError:
+            exit_date = None
 
     cond_key = str(row.get("Pedido Condição") or "").lower().strip()
     order_condition = _CONDITION_MAP.get(cond_key) or (cond_key.replace(" ", "_") if cond_key else None)

@@ -29,6 +29,7 @@ def create_load(truck_capacity_tons: float, destination: str, items: list[dict])
         "status": "pending",
         "total_weight_tons": total_weight_tons,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "in_transit_at": None,
         "dispatched_at": None,
         "delivered_at": None,
         "items": items,
@@ -49,6 +50,8 @@ def advance_status(load_id: str) -> dict | None:
     load["status"] = next_status
     now = datetime.now(timezone.utc).isoformat()
     if next_status == "in_transit":
+        load["in_transit_at"] = now
+    elif next_status == "dispatched":
         load["dispatched_at"] = now
     elif next_status == "delivered":
         load["delivered_at"] = now

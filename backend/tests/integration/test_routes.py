@@ -63,6 +63,20 @@ class TestStockLabels:
         for label in res.json():
             assert label["status"] in valid, f"unknown status: {label['status']}"
 
+    def test_exit_date_parsed_as_iso_date(self):
+        res = client.get("/web/api/v1/stock-labels")
+        labels_with_dates = [l for l in res.json() if l["exit_date"] is not None]
+        assert len(labels_with_dates) > 0, "No labels have exit_date — date parsing may be broken"
+        for label in labels_with_dates:
+            assert len(label["exit_date"]) == 10, f"exit_date not YYYY-MM-DD: {label['exit_date']!r}"
+            assert label["exit_date"][4] == "-" and label["exit_date"][7] == "-"
+
+    def test_embarque_dash_not_a_valid_id(self):
+        res = client.get("/web/api/v1/stock-labels")
+        for label in res.json():
+            assert label.get("embarque_id") != "-", \
+                f"embarque_id='-' leaked through for {label['progressivo']}"
+
 
 # ── bin-packing ───────────────────────────────────────────────────────────────
 
@@ -191,7 +205,8 @@ class TestLoadStatusTransition:
         res = client.patch(f"/web/api/v1/loads/{load_id}/status")
         assert res.status_code == 200
         assert res.json()["status"] == "in_transit"
-        assert res.json()["dispatched_at"]
+        assert res.json()["in_transit_at"]
+        assert res.json()["dispatched_at"] is None
 
     def test_in_transit_to_dispatched(self):
         plan = first_plan()
@@ -199,6 +214,7 @@ class TestLoadStatusTransition:
         client.patch(f"/web/api/v1/loads/{load_id}/status")
         res = client.patch(f"/web/api/v1/loads/{load_id}/status")
         assert res.json()["status"] == "dispatched"
+        assert res.json()["dispatched_at"]
 
     def test_dispatched_to_delivered(self):
         plan = first_plan()

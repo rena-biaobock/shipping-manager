@@ -48,6 +48,20 @@ def test_respects_max_iterations_cap():
     assert total_items <= 10, f"Expected ≤10 items processed, got {total_items}"
 
 
+def test_partial_true_when_max_iterations_hit():
+    labels = [label(str(i), 1) for i in range(20)]
+    bins = ffd(labels, 27, 5)
+    assert len(bins) > 0
+    for bin_ in bins:
+        assert bin_["partial"] is True
+
+
+def test_partial_false_when_all_items_processed():
+    bins = ffd([label("A", 5), label("B", 10)], 27)
+    for bin_ in bins:
+        assert bin_["partial"] is False
+
+
 def test_unique_id_per_bin():
     labels = [label(str(i), 10) for i in range(5)]
     ids = [b["_id"] for b in ffd(labels, 10)]

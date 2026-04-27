@@ -72,7 +72,8 @@ def test_advance_status_pending_to_in_transit():
     result = create_load(27.0, "Dest", SAMPLE_ITEMS)
     advanced = advance_status(result["id"])
     assert advanced["status"] == "in_transit"
-    assert advanced["dispatched_at"] is not None
+    assert advanced["in_transit_at"] is not None
+    assert advanced["dispatched_at"] is None
 
 
 def test_advance_status_in_transit_to_dispatched():
@@ -80,6 +81,7 @@ def test_advance_status_in_transit_to_dispatched():
     advance_status(result["id"])
     advanced = advance_status(result["id"])
     assert advanced["status"] == "dispatched"
+    assert advanced["dispatched_at"] is not None
 
 
 def test_advance_status_dispatched_to_delivered():

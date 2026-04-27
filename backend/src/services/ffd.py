@@ -1,4 +1,4 @@
-import time
+import uuid
 
 
 def ffd(labels: list[dict], truck_capacity_tons: float, max_iterations: int = 1000) -> list[dict]:
@@ -7,12 +7,11 @@ def ffd(labels: list[dict], truck_capacity_tons: float, max_iterations: int = 10
     sorted_labels = sorted(eligible, key=lambda l: l["volume_tons"], reverse=True)
 
     bins: list[dict] = []
-    ts = int(time.time() * 1000)
-    iterations = 0
+    capped = False
 
-    for label in sorted_labels:
-        iterations += 1
-        if iterations > max_iterations:
+    for i, label in enumerate(sorted_labels):
+        if i >= max_iterations:
+            capped = True
             break
 
         placed = False
@@ -26,12 +25,16 @@ def ffd(labels: list[dict], truck_capacity_tons: float, max_iterations: int = 10
 
         if not placed:
             bins.append({
-                "_id": f"GEN-{ts}-{str(len(bins) + 1).zfill(3)}",
+                "_id": f"GEN-{uuid.uuid4().hex[:12]}",
                 "items": [label],
                 "totalTons": round(label["volume_tons"], 4),
                 "totalPcs": label["piece_count"],
                 "partial": False,
                 "destination": "",
             })
+
+    if capped:
+        for bin_ in bins:
+            bin_["partial"] = True
 
     return bins
