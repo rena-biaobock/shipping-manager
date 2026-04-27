@@ -71,7 +71,7 @@
         <table>
           <thead>
             <tr>
-              <th>Load</th><th>Items</th>
+              <th>Load</th>
               <th class="right">Total Pieces</th>
               <th class="right">Total Tonnage</th>
               <th>Capacity Used</th>
@@ -81,18 +81,12 @@
           </thead>
           <tbody>
             <tr ng-repeat-start="plan in vm.generated track by plan._id"
-                ng-class="{'row-confirmed': vm.confirmed[plan._id], 'row-even': $even, 'row-odd': $odd}">
+                ng-click="vm.toggleExpand(plan._id)"
+                ng-class="{'row-confirmed': vm.confirmed[plan._id], 'row-even': $even, 'row-odd': $odd}"
+                style="cursor:pointer">
               <td style="white-space:nowrap">
                 <div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:2px">{{plan._id}}</div>
                 <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">Truck {{vm.maxTons}} t</div>
-              </td>
-              <td>
-                <button class="expand-btn"
-                        ng-click="vm.toggleExpand(plan._id)"
-                        style="font-family:var(--mono);font-size:11px;background:none;border:1px solid var(--border2);border-radius:4px;padding:2px 8px;color:var(--text-muted);cursor:pointer">
-                  {{plan.items.length}} item{{plan.items.length !== 1 ? 's' : ''}}
-                  {{vm.expanded[plan._id] ? '▲' : '▼'}}
-                </button>
               </td>
               <td class="mono right nowrap">{{vm.fmtNum(plan.totalPcs || 0)}}</td>
               <td class="right nowrap" style="font-family:var(--mono);font-size:14px;font-weight:700">
@@ -101,7 +95,7 @@
               <td style="min-width:140px">
                 <capacity-bar used="plan.totalTons" total="vm.maxTons"></capacity-bar>
               </td>
-              <td style="min-width:190px">
+              <td style="min-width:190px" ng-click="$event.stopPropagation()">
                 <span ng-if="vm.confirmed[plan._id]"
                       style="font-family:var(--mono);font-size:12px;color:var(--green)">
                   {{plan.destination}}
@@ -112,7 +106,7 @@
                        ng-model="plan.destination"
                        placeholder="e.g. Porto de Santos" />
               </td>
-              <td style="white-space:nowrap">
+              <td style="white-space:nowrap" ng-click="$event.stopPropagation()">
                 <load-status-badge ng-if="vm.confirmed[plan._id]" status="pending"></load-status-badge>
                 <button ng-if="!vm.confirmed[plan._id]"
                         class="confirm-btn"
@@ -125,7 +119,7 @@
             <tr ng-repeat-end
                 ng-if="vm.expanded[plan._id]"
                 ng-class="{'row-even': $even, 'row-odd': $odd}">
-              <td colspan="7" style="padding:0 0 8px 0;background:var(--surface2)">
+              <td colspan="6" style="padding:0 0 8px 0;background:var(--surface2)">
                 <div ng-repeat="item in plan.items track by item.progressivo"
                      style="font-size:12px;color:var(--text-muted);padding:4px 16px;white-space:nowrap">
                   <span style="font-family:var(--mono);font-size:10px;color:var(--accent)">{{item.progressivo}}</span>

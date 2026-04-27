@@ -57,7 +57,6 @@
       <thead>
         <tr>
           <th>Load ID</th>
-          <th>Items</th>
           <th class="sortable" ng-click="vm.setSort('created_at')">
             Date {{vm.sortField === 'created_at' ? (vm.sortAsc ? '↑' : '↓') : ''}}
           </th>
@@ -72,16 +71,10 @@
       </thead>
       <tbody>
         <tr ng-repeat-start="load in vm.page track by load.id"
-            ng-class="{'row-expanded': vm.expanded[load.id], 'row-even': $even, 'row-odd': $odd}">
+            ng-click="vm.toggleExpand(load)"
+            ng-class="{'row-expanded': vm.expanded[load.id], 'row-even': $even, 'row-odd': $odd}"
+            style="cursor:pointer">
           <td class="mono accent nowrap">{{load.id}}</td>
-          <td>
-            <button class="expand-btn"
-                    ng-click="vm.toggleExpand(load)"
-                    style="font-family:var(--mono);font-size:11px;background:none;border:1px solid var(--border2);border-radius:4px;padding:2px 8px;color:var(--text-muted);cursor:pointer">
-              {{vm.itemsCache[load.id] ? vm.itemsCache[load.id].length + ' item' + (vm.itemsCache[load.id].length !== 1 ? 's' : '') : 'Items'}}
-              {{vm.expanded[load.id] ? '▲' : '▼'}}
-            </button>
-          </td>
           <td class="mono muted nowrap">{{(load.created_at | date:'yyyy-MM-dd') || '—'}}</td>
           <td>{{load.destination || '—'}}</td>
           <td class="mono right nowrap">{{vm.fmtTons(load.total_weight_tons)}}</td>
@@ -102,7 +95,7 @@
           </td>
         </tr>
         <tr ng-repeat-end ng-if="vm.expanded[load.id]">
-          <td colspan="8" style="padding:0">
+          <td colspan="7" style="padding:0">
             <div class="expand-panel">
               <table>
                 <thead>
