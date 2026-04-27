@@ -13,7 +13,7 @@ angular.module('shippingManager').controller('LoadsController',
     vm.page       = [];
     vm.loading    = true;
     vm.error      = null;
-    vm.expandedId = null;
+    vm.expanded   = {};
     vm.itemsCache = {};
 
     vm.currentPage = 1;
@@ -95,9 +95,8 @@ angular.module('shippingManager').controller('LoadsController',
     };
 
     vm.toggleExpand = function(load) {
-      if (vm.expandedId === load.id) { vm.expandedId = null; return; }
-      vm.expandedId = load.id;
-      if (!vm.itemsCache[load.id]) {
+      vm.expanded[load.id] = !vm.expanded[load.id];
+      if (vm.expanded[load.id] && !vm.itemsCache[load.id]) {
         LoadsService.getLoadItems(load.id).then(function(res) {
           vm.itemsCache[load.id] = res.data;
         });

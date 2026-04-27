@@ -254,7 +254,7 @@ tr.row-expanded td { background: var(--surface3) !important; }
 
 .expand-panel {
   background: var(--bg); border-top: 1px solid var(--border2);
-  animation: expandDown 0.2s ease both; padding: 0 0 0 56px;
+  animation: expandDown 0.2s ease both; padding: 0;
 }
 .sub-th {
   padding: 9px 14px; font-size: 9px; font-family: var(--mono);
