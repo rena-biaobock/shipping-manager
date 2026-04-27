@@ -1,22 +1,15 @@
 services:
+  # Node.js / Express mock of the Progress OpenEdge PASOE backend.
+  # Swap build context to ./backend once a licensed openedge:12.7 image is available.
   backend:
-    build: ./backend
+    build: ./backend-mock
     ports:
       - "8080:8080"
     environment:
-      OE_CORS_ORIGINS: "http://localhost"
-      OE_JWT_SECRET: "changeme"
-      OE_DB_PATH: "/data/shipping_manager"
-      OE_IDLE_THRESHOLD_DAYS: "30"
+      CORS_ORIGINS: "http://localhost"
+      PORT: "8080"
     volumes:
-      - oe_data:/data
-      - reports:/reports
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/web/api/v1/stock-labels"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      - ./stock.xlsx:/data/stock.xlsx:ro
 
   frontend:
     build:
@@ -26,9 +19,4 @@ services:
     ports:
       - "80:80"
     depends_on:
-      backend:
-        condition: service_healthy
-
-volumes:
-  oe_data:
-  reports:
+      - backend

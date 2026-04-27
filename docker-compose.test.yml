@@ -1,0 +1,12 @@
+services:
+  backend-test:
+    build:
+      context: ./backend-mock
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./stock.xlsx:/data/stock.xlsx:ro
+
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.test
