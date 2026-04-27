@@ -277,4 +277,49 @@ describe('LoadGenController', function() {
       expect(result).toBe(true);
     });
   });
+
+  describe('expand / collapse', function() {
+    it('starts with vm.expanded as an empty object', function() {
+      var vm = makeVm();
+      expect(vm.expanded).toEqual({});
+    });
+
+    it('toggleExpand marks a plan as expanded', function() {
+      var vm = makeVm();
+      vm.toggleExpand('GEN-001');
+      expect(vm.expanded['GEN-001']).toBe(true);
+    });
+
+    it('toggleExpand collapses an already-expanded plan', function() {
+      var vm = makeVm();
+      vm.toggleExpand('GEN-001');
+      vm.toggleExpand('GEN-001');
+      expect(vm.expanded['GEN-001']).toBe(false);
+    });
+
+    it('generate() resets vm.expanded', function() {
+      var vm = makeVm();
+      vm.toggleExpand('GEN-001');
+      vm.generate();
+      $rootScope.$digest();
+      expect(vm.expanded).toEqual({});
+    });
+  });
+
+  describe('fmtTons()', function() {
+    it('formats an integer with 3 decimal places', function() {
+      var vm = makeVm();
+      expect(vm.fmtTons(10)).toBe('10.000 t');
+    });
+
+    it('formats a fractional value rounded to 3 decimal places', function() {
+      var vm = makeVm();
+      expect(vm.fmtTons(18.3456789)).toBe('18.346 t');
+    });
+
+    it('treats null as 0 and formats with 3 decimal places', function() {
+      var vm = makeVm();
+      expect(vm.fmtTons(null)).toBe('0.000 t');
+    });
+  });
 });

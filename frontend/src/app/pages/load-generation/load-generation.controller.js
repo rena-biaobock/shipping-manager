@@ -15,11 +15,16 @@ angular.module('shippingManager').controller('LoadGenController',
 
     vm.generated  = [];
     vm.confirmed  = {};
+    vm.expanded   = {};
     vm.generating = false;
     vm.error      = null;
 
     vm.fmtNum  = function(n) { return new Intl.NumberFormat('en-US').format(n); };
-    vm.fmtTons = function(n) { return vm.fmtNum((+n || 0).toFixed(1)) + ' t'; };
+    vm.fmtTons = function(n) {
+      return new Intl.NumberFormat('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(+n || 0) + ' t';
+    };
+
+    vm.toggleExpand = function(planId) { vm.expanded[planId] = !vm.expanded[planId]; };
 
     StockService.getLabels().then(function(res) {
       var labels = res.data;
@@ -32,6 +37,7 @@ angular.module('shippingManager').controller('LoadGenController',
       vm.error      = null;
       vm.generated  = [];
       vm.confirmed  = {};
+      vm.expanded   = {};
 
       var apiFilters = {
         warehouse: vm.filters.warehouse !== 'all' ? vm.filters.warehouse : null,
