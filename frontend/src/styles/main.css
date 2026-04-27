@@ -41,6 +41,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); over
 /* ── Layout ─────────────────────────────────────────────────────────── */
 .app-shell { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
 .main-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+[ng-view] { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+[ng-view] > div { flex: 1; min-height: 0; }
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 .sidebar {
@@ -107,12 +109,12 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); over
 .sidebar-toggle:hover { color: var(--text); }
 
 /* ── Summary cards ──────────────────────────────────────────────────── */
-.cards-row { display: flex; gap: 12px; padding: 18px 28px; flex-shrink: 0; overflow-x: auto; }
+.cards-row { display: flex; gap: 12px; padding: 18px 28px; flex-shrink: 0; overflow-x: auto; height: 150px; }
 
 .total-card {
   background: var(--surface); border: 1px solid var(--border);
   border-top: 2px solid var(--accent); padding: 18px 20px;
-  flex: 0 0 150px; position: relative; overflow: hidden;
+  flex: 0 0 150px; height: 100%; position: relative; overflow: hidden;
   animation: fadeUp 0.45s ease both;
 }
 .total-card .card-bg {
@@ -129,14 +131,16 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); over
 .breakdown-card {
   background: var(--surface); border: 1px solid var(--border);
   border-top: 2px solid var(--blue); padding: 18px 20px;
-  flex: 1; min-width: 160px; overflow: hidden;
+  flex: 1; min-width: 160px; height: 100%; overflow: hidden;
+  display: flex; flex-direction: column;
   animation: fadeUp 0.45s ease both;
 }
 .breakdown-card .card-label {
   font-size: 9px; font-family: var(--mono); color: var(--text-muted);
   letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 12px;
+  flex-shrink: 0;
 }
-.breakdown-card .breakdown-rows { display: flex; flex-direction: column; gap: 7px; }
+.breakdown-card .breakdown-rows { display: flex; flex-direction: column; gap: 7px; overflow-y: auto; flex: 1; }
 .breakdown-card .breakdown-row { display: flex; align-items: center; gap: 8px; }
 .breakdown-card .breakdown-key {
   font-size: 11px; color: var(--text-muted); white-space: nowrap;
@@ -219,7 +223,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); over
 }
 
 /* ── Table ──────────────────────────────────────────────────────────── */
-.table-wrap { flex: 1; overflow: auto; margin: 0 28px 24px; border: 1px solid var(--border); }
+.table-wrap { flex: 1; overflow: auto; margin: 0 28px 24px; border: 1px solid var(--border); min-height: 0; }
 table { width: 100%; border-collapse: collapse; table-layout: auto; }
 th {
   position: sticky; top: 0; z-index: 2;
@@ -290,7 +294,7 @@ tr.row-expanded td { background: var(--surface3) !important; }
 .generate-btn:hover { opacity: 0.85; }
 
 /* ── Load Gen results ───────────────────────────────────────────────── */
-.results-wrap { flex: 1; overflow: auto; margin: 16px 28px 24px; }
+.results-wrap { flex: 1; overflow: auto; margin: 16px 28px 24px; min-height: 0; }
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center;
