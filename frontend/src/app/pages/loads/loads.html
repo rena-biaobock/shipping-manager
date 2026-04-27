@@ -97,32 +97,14 @@
         <tr ng-repeat-end ng-if="vm.expanded[load.id]">
           <td colspan="7" style="padding:0">
             <div class="expand-panel">
-              <table>
-                <thead>
-                  <tr style="border-bottom:1px solid var(--border)">
-                    <th class="sub-th">Code</th>
-                    <th class="sub-th">Description</th>
-                    <th class="sub-th">Client</th>
-                    <th class="sub-th right">Pieces</th>
-                    <th class="sub-th right">Tonnage</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr ng-repeat="item in vm.itemsCache[load.id] track by item.progressivo"
-                      style="border-bottom:1px solid var(--border)">
-                    <td class="sub-td mono accent">{{item.item_code || item.progressivo}}</td>
-                    <td class="sub-td" style="font-size:13px;font-weight:500">{{item.description || '—'}}</td>
-                    <td class="sub-td" style="font-size:12px;color:var(--text-muted)">{{item.customer || '—'}}</td>
-                    <td class="sub-td mono right">{{item.piece_count || '—'}}</td>
-                    <td class="sub-td mono right">{{item.volume_tons ? (item.volume_tons | number:3) + ' t' : '—'}}</td>
-                  </tr>
-                  <tr class="sub-total">
-                    <td colspan="3" class="sub-td mono" style="font-size:10px;color:var(--text-dim);letter-spacing:0.08em">TOTAL</td>
-                    <td class="sub-td mono right" style="font-size:12px;font-weight:700">{{vm.loadTotalPcs(load.id)}}</td>
-                    <td class="sub-td mono right" style="font-size:12px;font-weight:700">{{vm.fmtTons(vm.loadTotalTons(load.id))}}</td>
-                  </tr>
-                </tbody>
-              </table>
+              <div ng-repeat="item in vm.itemsCache[load.id] track by item.progressivo"
+                   style="font-size:12px;color:var(--text-muted);padding:4px 16px;white-space:nowrap">
+                <span style="font-family:var(--mono);font-size:10px;color:var(--accent)">{{item.item_code || item.progressivo}}</span>
+                — {{(item.description || '').slice(0, 48)}}
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-left:8px">{{item.customer || '—'}}</span>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-left:8px">{{item.piece_count || 0}} pcs</span>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-left:8px">{{vm.fmtTons(item.volume_tons)}}</span>
+              </div>
             </div>
           </td>
         </tr>

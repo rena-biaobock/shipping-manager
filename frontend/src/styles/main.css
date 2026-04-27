@@ -256,13 +256,6 @@ tr.row-expanded td { background: var(--surface3) !important; }
   background: var(--bg); border-top: 1px solid var(--border2);
   animation: expandDown 0.2s ease both; padding: 0;
 }
-.sub-th {
-  padding: 9px 14px; font-size: 9px; font-family: var(--mono);
-  color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; text-align: left;
-}
-.sub-th.right { text-align: right; }
-.sub-td { padding: 10px 14px; }
-.sub-total { background: var(--surface2); }
 
 /* ── Load Gen filter panel ──────────────────────────────────────────── */
 .filter-panel {
