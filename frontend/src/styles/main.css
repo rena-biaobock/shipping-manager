@@ -96,8 +96,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); over
 .sidebar.collapsed .nav-label,
 .sidebar.collapsed .nav-section-label,
 .sidebar.collapsed .sidebar-footer .footer-value,
-.sidebar.collapsed .sidebar-footer .footer-label { display: none; }
+.sidebar.collapsed .sidebar-footer .footer-label,
+.sidebar.collapsed .sidebar-logo { display: none; }
 .sidebar.collapsed .sidebar-header { padding: 18px 9px; justify-content: center; }
+.sidebar.collapsed .sidebar-toggle { margin-left: 0; }
 .sidebar.collapsed .nav-item { justify-content: center; padding: 9px; }
 .sidebar.collapsed .sidebar-footer { padding: 14px 9px; text-align: center; }
 
