@@ -33,7 +33,7 @@ angular.module('shippingManager').controller('StockController',
 
     StockService.getLabels().then(function(res) {
       vm.labels = res.data;
-      vm.warehouses = Array.from(new Set(vm.labels.map(function(l) { return l.warehouse_code; }))).sort();
+      vm.warehouses = Array.from(new Set(vm.labels.map(function(l) { return l.warehouse_code; }).filter(Boolean))).sort();
       vm.applyFilters();
       vm.loading = false;
     }).catch(function() {
