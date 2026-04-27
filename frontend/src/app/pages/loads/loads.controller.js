@@ -118,12 +118,5 @@ angular.module('shippingManager').controller('LoadsController',
       });
     };
 
-    vm.loadTotalPcs = function(loadId) {
-      return (vm.itemsCache[loadId] || []).reduce(function(s, i) { return s + (i.piece_count || 0); }, 0);
-    };
-
-    vm.loadTotalTons = function(loadId) {
-      return (vm.itemsCache[loadId] || []).reduce(function(s, i) { return s + (parseFloat(i.volume_tons) || 0); }, 0);
-    };
   }],
 );
